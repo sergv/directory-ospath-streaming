@@ -1,0 +1,4 @@
+packages:
+  directory-ospath-streaming.cabal
+
+tests: True
