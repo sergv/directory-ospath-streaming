@@ -34,6 +34,8 @@ build-type:
 extra-source-files:
   Changelog.md
   Readme.md
+  test/filesystem/*.txt
+  test/filesystem/bin/*.txt
 
 homepage:
   https://github.com/sergv/directory-ospath-streaming
