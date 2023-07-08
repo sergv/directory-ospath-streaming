@@ -16,17 +16,17 @@ jobs:
       matrix:
         os: [ubuntu-latest]
         ghc:
-          - "9.2.7"
-          - "9.4.5"
-          - "9.6.1"
+          - "9.2"
+          - "9.4"
+          - "9.6"
         include:
         - os: macOS-latest
-          ghc: "9.6.1"
+          ghc: "9.6"
         - os: windows-latest
-          ghc: "9.6.1"
+          ghc: "9.6"
     steps:
     - uses: actions/checkout@v3
-    - uses: haskell/actions/setup@v2.3.7
+    - uses: haskell/actions/setup@v2
       id: setup-haskell-cabal
       with:
         ghc-version: ${{ matrix.ghc }}
@@ -42,18 +42,22 @@ jobs:
     - name: Cabal version
       run: |
         cabal --version
+    - name: Unpack
+      run: |
+        cabal sdist --ignore-project --output-directory ..
+        cd ..
+        cabal get directory-ospath-streaming-*.tar.gz
+
     - name: Build & Test default
       run: |
-        cabal sdist --ignore-project --output-directory .
-        cabal get directory-ospath-streaming-*.tar.gz
-        cd directory-ospath-streaming-*/
+        cd ../directory-ospath-streaming-*/
         cabal build all
         cabal test --test-show-details=direct all
     - name: Haddock
       run: |
-        cd directory-ospath-streaming-*/
+        cd ../directory-ospath-streaming-*/
         cabal haddock all
     - name: Cabal check
       run: |
-        cd directory-ospath-streaming-*/
+        cd ../directory-ospath-streaming-*/
         cabal check
