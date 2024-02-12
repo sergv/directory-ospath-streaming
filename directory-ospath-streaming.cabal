@@ -44,6 +44,16 @@ source-repository head
   type: git
   location: https://github.com/sergv/directory-ospath-streaming.git
 
+-- Cabal will pick this flag up automatically during solving. Default to true
+-- since that’s what should be picked up for all future filepath versions starting at 1.5.
+flag os-string
+  description:
+    Depend on os-string package, needed for filepath >= 1.5
+  default:
+    True
+  manual:
+    False
+
 common ghc-options
   default-language:
     GHC2021
@@ -71,8 +81,17 @@ common ghc-options
     ghc-options:
       -Wno-missing-kind-signatures
 
+common depends-on-filepath
+  if flag(os-string)
+    build-depends:
+      , filepath >= 1.5
+      , os-string >= 2.0
+  else
+    build-depends:
+      , filepath >= 1.4.100 && < 1.5
+
 library
-  import: ghc-options
+  import: ghc-options, depends-on-filepath
   exposed-modules:
     System.Directory.OsPath.FileType
     System.Directory.OsPath.Streaming
@@ -80,7 +99,7 @@ library
     src
   build-depends:
     , base >= 4.16 && < 5
-    , filepath >= 1.4.100
+
   if os(windows)
     build-depends:
       , atomic-counter
@@ -91,7 +110,7 @@ library
       , unix >= 2.8
 
 test-suite test
-  import: ghc-options
+  import: ghc-options, depends-on-filepath
   type:
     exitcode-stdio-1.0
   main-is:
@@ -103,7 +122,6 @@ test-suite test
     , base >= 4.16
     , directory
     , directory-ospath-streaming
-    , filepath >= 1.4.100
     , random
     , tasty
     , tasty-hunit
