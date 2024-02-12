@@ -32,10 +32,12 @@ build-type:
   Simple
 
 extra-source-files:
-  Changelog.md
-  Readme.md
   test/filesystem/*.txt
   test/filesystem/bin/*.txt
+
+extra-doc-files:
+  Changelog.md
+  Readme.md
 
 homepage:
   https://github.com/sergv/directory-ospath-streaming
