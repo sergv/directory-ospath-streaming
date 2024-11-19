@@ -57,11 +57,7 @@ flag os-string
     False
 
 common ghc-options
-  default-language:
-    GHC2021
-
-  default-extensions:
-    LambdaCase
+  default-language: Haskell2010
 
   ghc-options:
     -Weverything
@@ -70,18 +66,27 @@ common ghc-options
     -Wno-missed-specialisations
     -Wno-missing-import-lists
     -Wno-missing-local-signatures
-    -Wno-missing-safe-haskell-mode
     -Wno-safe
-    -Wno-type-defaults
     -Wno-unsafe
 
   if impl(ghc >= 8.8)
     ghc-options:
       -Wno-missing-deriving-strategies
 
+  if impl(ghc >= 8.10)
+    ghc-options:
+      -Wno-missing-safe-haskell-mode
+      -Wno-prepositive-qualified-module
+
   if impl(ghc >= 9.2)
     ghc-options:
       -Wno-missing-kind-signatures
+
+  if impl(ghc >= 9.8)
+    ghc-options:
+      -Wno-missing-role-annotations
+      -Wno-missing-poly-kind-signatures
+
 
 common depends-on-filepath
   if flag(os-string)
@@ -100,7 +105,7 @@ library
   hs-source-dirs:
     src
   build-depends:
-    , base >= 4.16 && < 5
+    , base >= 4.12 && < 5
 
   if os(windows)
     build-depends:
@@ -108,6 +113,7 @@ library
       , directory >= 1.3.8
       , Win32 >= 2.13.3
   else
+    -- Cannot use lower version because it doesn’t support OsStrings
     build-depends:
       , unix >= 2.8
 
@@ -121,7 +127,7 @@ test-suite test
     .
     test
   build-depends:
-    , base >= 4.16
+    , base >= 4.12
     , directory
     , directory-ospath-streaming
     , random

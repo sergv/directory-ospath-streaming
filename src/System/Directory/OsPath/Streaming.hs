@@ -16,13 +16,13 @@ import System.OsPath (osp)
 #ifdef mingw32_HOST_OS
 
 import Control.Concurrent.Counter (Counter)
-import Control.Concurrent.Counter qualified as Counter
+import qualified Control.Concurrent.Counter as Counter
 import Control.Monad (unless)
 import System.OsPath.Types (OsPath)
 import System.OsString.Internal.Types (OsString(OsString), getOsString)
 import System.OsString.Windows (pstr)
-import System.Win32.Types qualified as Win32
-import System.Win32.WindowsString.File qualified as Win32
+import qualified System.Win32.Types as Win32
+import qualified System.Win32.WindowsString.File as Win32
 
 data DirStream = DirStream !Win32.HANDLE !Win32.FindData !Counter
 
@@ -56,7 +56,7 @@ readDirStream (DirStream h fdat hasMore) = go
 import System.OsPath.Types (OsPath)
 import System.OsString.Internal.Types (OsString(OsString), getOsString)
 import System.Posix.Directory.PosixPath (DirStream, closeDirStream)
-import System.Posix.Directory.PosixPath qualified as Posix
+import qualified System.Posix.Directory.PosixPath as Posix
 
 openDirStream :: OsPath -> IO DirStream
 openDirStream = Posix.openDirStream . getOsString

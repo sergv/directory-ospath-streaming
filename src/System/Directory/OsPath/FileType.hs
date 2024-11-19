@@ -4,7 +4,8 @@
 -- License:    Apache-2.0 (see LICENSE)
 -- Maintainer: serg.foo@gmail.com
 
-{-# LANGUAGE CPP #-}
+{-# LANGUAGE CPP                 #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 module System.Directory.OsPath.FileType
   ( FileType(..)
@@ -30,7 +31,7 @@ getFileType fp = do
 
 import Control.Exception (try, IOException)
 import System.OsString.Internal.Types (getOsString)
-import System.Posix.Files.PosixString qualified as PosixF
+import qualified System.Posix.Files.PosixString as PosixF
 
 getFileType :: OsPath -> IO FileType
 getFileType fp = do

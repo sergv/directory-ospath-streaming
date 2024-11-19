@@ -6,15 +6,15 @@
 
 {-# LANGUAGE ApplicativeDo       #-}
 {-# LANGUAGE CPP                 #-}
-{-# LANGUAGE ImportQualifiedPost #-}
 {-# LANGUAGE NamedFieldPuns      #-}
 {-# LANGUAGE QuasiQuotes         #-}
 {-# LANGUAGE RecordWildCards     #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 module TestMain (main) where
 
 import Control.Exception
-import Data.List qualified as L
+import qualified Data.List as L
 import Numeric (showHex)
 import System.Directory.OsPath
 import System.OsPath
@@ -28,7 +28,7 @@ import Test.Tasty
 import Test.Tasty.HUnit
 
 #ifndef mingw32_HOST_OS
-import System.Posix.Files.PosixString qualified as Posix
+import qualified System.Posix.Files.PosixString as Posix
 #endif
 
 main :: IO ()
@@ -119,7 +119,7 @@ createFreshTempDir dir prefix = go
       let path = dir </> prefix <> [osp|-|] <> n'
       exists <- doesDirectoryExist path
       if exists
-      then go
-      else do
-        createDirectory path
-        pure path
+        then go
+        else do
+          createDirectory path
+          pure path
