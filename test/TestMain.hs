@@ -15,11 +15,7 @@ module TestMain (main) where
 
 import Control.Exception
 import qualified Data.List as L
-import Numeric (showHex)
-import System.Directory.OsPath
 import System.OsPath
-import System.OsString.Internal.Types (getOsString)
-import System.Random
 
 import System.Directory.OsPath.FileType
 import System.Directory.OsPath.Streaming
@@ -28,6 +24,11 @@ import Test.Tasty
 import Test.Tasty.HUnit
 
 #ifndef mingw32_HOST_OS
+import Numeric (showHex)
+import System.Directory.OsPath
+import System.OsString.Internal.Types (getOsString)
+import System.Random
+
 import qualified System.Posix.Files.PosixString as Posix
 #endif
 
@@ -108,7 +109,6 @@ tests = testGroup "Tests"
 #ifndef mingw32_HOST_OS
 tryIO :: IO a -> IO (Either IOException a)
 tryIO = try
-#endif
 
 createFreshTempDir :: OsPath -> OsPath -> IO OsPath
 createFreshTempDir dir prefix = go
@@ -123,3 +123,4 @@ createFreshTempDir dir prefix = go
         else do
           createDirectory path
           pure path
+#endif

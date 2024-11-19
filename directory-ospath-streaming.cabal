@@ -138,14 +138,14 @@ test-suite test
     test
   build-depends:
     , base >= 4.12
-    , directory
     , directory-ospath-streaming
-    , random
     , tasty
     , tasty-hunit
   if !os(windows)
     build-depends:
-      unix >= 2.8
+      , directory
+      , random
+      , unix >= 2.8
   ghc-options:
     -rtsopts
     -main-is TestMain
