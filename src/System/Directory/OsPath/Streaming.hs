@@ -68,6 +68,8 @@ openDirStream = Posix.openDirStream . getOsString
 readDirStream :: DirStream -> IO (Maybe OsPath)
 readDirStream ds = go
   where
+
+# if !MIN_VERSION_unix(2, 8, 6)
     go = do
       fp <- Posix.readDirStream ds
       case () of
@@ -77,5 +79,18 @@ readDirStream ds = go
           -> go
           | otherwise
           -> pure $ Just $ OsString fp
+# endif
+
+# if MIN_VERSION_unix(2, 8, 6)
+    go = do
+      fp <- Posix.readDirStreamMaybe ds
+      case fp of
+        Nothing -> pure Nothing
+        Just fp'
+          | fp' == getOsString [osp|.|] || fp' == getOsString [osp|..|]
+          -> go
+          | otherwise
+          -> pure $ Just $ OsString fp'
+# endif
 
 #endif
