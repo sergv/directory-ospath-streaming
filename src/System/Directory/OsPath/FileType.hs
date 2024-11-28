@@ -27,7 +27,9 @@ getFileType fp = do
     isDir <- doesDirectoryExist fp
     pure $ if isDir then Directory else Other
 
-#else
+#endif
+
+#ifndef mingw32_HOST_OS
 
 import Control.Exception (try, IOException)
 import System.OsString.Internal.Types (getOsString)

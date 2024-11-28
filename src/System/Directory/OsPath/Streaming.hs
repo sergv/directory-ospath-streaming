@@ -51,7 +51,10 @@ readDirStream (DirStream h fdat hasMore) = go
         else pure $ Just $ OsString filename
       else pure Nothing
 
-#else
+#endif
+
+-- Don’t use #else to make treesitter do better job - it parses #else part as comments.
+#ifndef mingw32_HOST_OS
 
 import System.OsPath.Types (OsPath)
 import System.OsString.Internal.Types (OsString(OsString), getOsString)

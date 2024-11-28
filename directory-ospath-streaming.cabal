@@ -97,7 +97,6 @@ common ghc-options
       -Wno-missing-role-annotations
       -Wno-missing-poly-kind-signatures
 
-
 common depends-on-filepath
   if flag(os-string)
     build-depends:
