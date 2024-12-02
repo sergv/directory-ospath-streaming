@@ -5,7 +5,7 @@ cabal-version: 3.0
 name:
   directory-ospath-streaming
 version:
-  0.1.0.3
+  0.2
 synopsis:
   Stream directory entries in constant memory in vanilla IO
 description:
@@ -109,16 +109,22 @@ common depends-on-filepath
 library
   import: ghc-options, depends-on-filepath
   exposed-modules:
-    System.Directory.OsPath.FileType
     System.Directory.OsPath.Streaming
+    System.Directory.OsPath.Streaming.Internal
+    System.Directory.OsPath.Streaming.Internal.Raw
+    System.Directory.OsPath.Types
+  other-modules:
+    System.Directory.OsPath.Contents
+    System.Directory.OsPath.FileType
   hs-source-dirs:
     src
   build-depends:
+    , atomic-counter
     , base >= 4.12 && < 5
+    , ghc-prim
 
   if os(windows)
     build-depends:
-      , atomic-counter
       , directory >= 1.3.8
       , Win32 >= 2.13.3
   else

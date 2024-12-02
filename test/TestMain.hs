@@ -17,7 +17,6 @@ import Control.Exception
 import qualified Data.List as L
 import System.OsPath
 
-import System.Directory.OsPath.FileType
 import System.Directory.OsPath.Streaming
 
 import Test.Tasty
@@ -47,9 +46,9 @@ tests = testGroup "Tests"
       res @?= [[osp|bar.txt|], [osp|baz.txt|], [osp|bin|], [osp|foo.txt|]]
   , testGroup "getFileType general"
       [ testCase "file" $ do
-          getFileType [osp|directory-ospath-streaming.cabal|] >>= (@?= File)
+          getFileType [osp|directory-ospath-streaming.cabal|] >>= (@?= File Regular)
       , testCase "directory" $ do
-          getFileType [osp|test|] >>= (@?= Directory)
+          getFileType [osp|test|] >>= (@?= Directory Regular)
       ]
 #ifndef mingw32_HOST_OS
   , withResource
@@ -66,7 +65,7 @@ tests = testGroup "Tests"
               (getOsString (currDir </> [osp|directory-ospath-streaming.cabal|]))
               (getOsString dest)
             ft <- getFileType dest
-            ft @?= FileSym
+            ft @?= File Symlink
         , testCase "directory symlink" $ do
             tmp     <- mkTmpDir
             currDir <- getCurrentDirectory
@@ -75,7 +74,7 @@ tests = testGroup "Tests"
               (getOsString (currDir </> [osp|src|]))
               (getOsString dest)
             ft <- getFileType dest
-            ft @?= DirectorySym
+            ft @?= Directory Symlink
         , testCase "other" $ do
             tmp <- mkTmpDir
             let dest = tmp </> [osp|tmp3|]
