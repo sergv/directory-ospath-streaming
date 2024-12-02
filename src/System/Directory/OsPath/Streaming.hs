@@ -1,6 +1,7 @@
 {-# LANGUAGE CPP                 #-}
 {-# LANGUAGE QuasiQuotes         #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TupleSections       #-}
 
 -- | Streaming functions for interacting with the filesystem.
 
@@ -11,6 +12,7 @@ module System.Directory.OsPath.Streaming
   , closeDirStream
   ) where
 
+import Data.Coerce (coerce)
 import System.OsPath (osp)
 
 #ifdef mingw32_HOST_OS
@@ -24,6 +26,7 @@ import System.OsString.Windows (pstr)
 import qualified System.Win32.Types as Win32
 import qualified System.Win32.WindowsString.File as Win32
 
+-- | Abstract handle to directory contents.
 data DirStream = DirStream !Win32.HANDLE !Win32.FindData !Counter
 
 openDirStream :: OsPath -> IO DirStream
@@ -58,20 +61,25 @@ readDirStream (DirStream h fdat hasMore) = go
 
 import System.OsPath.Types (OsPath)
 import System.OsString.Internal.Types (OsString(OsString), getOsString)
-import System.Posix.Directory.PosixPath (DirStream, closeDirStream)
 import qualified System.Posix.Directory.PosixPath as Posix
 
+-- | Abstract handle to directory contents.
+newtype DirStream = DirStream { unDirStream :: Posix.DirStream }
+
 openDirStream :: OsPath -> IO DirStream
-openDirStream = Posix.openDirStream . getOsString
+openDirStream = coerce . Posix.openDirStream . getOsString
+
+closeDirStream :: DirStream -> IO ()
+closeDirStream = coerce Posix.closeDirStream
 
 {-# INLINE readDirStream #-}
 readDirStream :: DirStream -> IO (Maybe OsPath)
-readDirStream ds = go
+readDirStream (DirStream stream) = go
   where
 
 # if !MIN_VERSION_unix(2, 8, 6)
     go = do
-      fp <- Posix.readDirStream ds
+      fp <- Posix.readDirStream stream
       case () of
         _ | fp == mempty
           -> pure Nothing
@@ -83,7 +91,7 @@ readDirStream ds = go
 
 # if MIN_VERSION_unix(2, 8, 6)
     go = do
-      fp <- Posix.readDirStreamMaybe ds
+      fp <- Posix.readDirStreamMaybe stream
       case fp of
         Nothing -> pure Nothing
         Just fp'

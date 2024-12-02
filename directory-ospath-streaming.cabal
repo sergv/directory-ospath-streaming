@@ -109,6 +109,7 @@ common depends-on-filepath
 library
   import: ghc-options, depends-on-filepath
   exposed-modules:
+    System.Directory.OsPath.Contents
     System.Directory.OsPath.FileType
     System.Directory.OsPath.Streaming
   hs-source-dirs:
