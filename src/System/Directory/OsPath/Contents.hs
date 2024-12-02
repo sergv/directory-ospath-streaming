@@ -5,7 +5,6 @@
 -- Maintainer: serg.foo@gmail.com
 
 {-# LANGUAGE BangPatterns        #-}
-{-# LANGUAGE RankNTypes          #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
 module System.Directory.OsPath.Contents
@@ -20,8 +19,8 @@ import System.IO.Unsafe (unsafeInterleaveIO)
 import System.OsPath
 
 import qualified System.Directory.OsPath.FileType as Streaming
-import System.Directory.OsPath.Streaming
-import qualified System.Directory.OsPath.Streaming as Streaming
+import System.Directory.OsPath.SafeStreaming
+import qualified System.Directory.OsPath.SafeStreaming as Streaming
 
 -- | Relative filename, without directory separators
 newtype Rel a = Rel { unRel :: a }
@@ -69,12 +68,15 @@ listContentsRecFold depthLimit foldDir filePred =
 
     goNewDir :: Int -> OsPath -> IO [a] -> IO [a]
     goNewDir !d dir rest = do
-      mask $ \restore ->
-        goDirStream restore d dir rest =<< Streaming.openDirStream dir
+      mask $ \restore -> do
+        stream <- Streaming.openDirStream dir
+        onException
+          (restore
+            (goDirStream d dir (Streaming.closeDirStream stream *> rest) stream))
+          (Streaming.closeDirStream stream)
 
-    goDirStream :: (forall b. IO b -> IO b) -> Int -> OsPath -> IO [a] -> DirStream -> IO [a]
-    goDirStream restore !d dir rest stream =
-      restore (go d) `onException` Streaming.closeDirStream stream
+    goDirStream :: Int -> OsPath -> IO [a] -> DirStream -> IO [a]
+    goDirStream !d dir rest stream = go d
       where
         go :: Int -> IO [a]
         go 0     = rest

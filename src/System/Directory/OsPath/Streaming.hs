@@ -1,7 +1,5 @@
-{-# LANGUAGE CPP                 #-}
-{-# LANGUAGE QuasiQuotes         #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TupleSections       #-}
+{-# LANGUAGE CPP         #-}
+{-# LANGUAGE QuasiQuotes #-}
 
 -- | Streaming functions for interacting with the filesystem.
 
@@ -16,29 +14,59 @@ import Data.Coerce (coerce)
 import System.OsPath (osp)
 
 #ifdef mingw32_HOST_OS
-
-import Control.Concurrent.Counter (Counter)
-import qualified Control.Concurrent.Counter as Counter
 import Control.Monad (unless)
 import System.OsPath.Types (OsPath)
 import System.OsString.Internal.Types (OsString(OsString), getOsString)
 import System.OsString.Windows (pstr)
 import qualified System.Win32.Types as Win32
 import qualified System.Win32.WindowsString.File as Win32
+#endif
 
+-- Don’t use #else to make treesitter do better job - it parses #else part as comments.
+#ifndef mingw32_HOST_OS
+import System.OsPath.Types (OsPath)
+import System.OsString.Internal.Types (OsString(OsString), getOsString)
+import qualified System.Posix.Directory.PosixPath as Posix
+#endif
+
+#ifdef mingw32_HOST_OS
 -- | Abstract handle to directory contents.
 data DirStream = DirStream !Win32.HANDLE !Win32.FindData !Counter
+#endif
+
+#ifndef mingw32_HOST_OS
+-- | Abstract handle to directory contents.
+newtype DirStream = DirStream Posix.DirStream
+#endif
 
 openDirStream :: OsPath -> IO DirStream
+#ifdef mingw32_HOST_OS
 openDirStream fp = do
   (h, fdat) <- Win32.findFirstFile $ getOsString fp <> [pstr|\*|]
   hasMore <- Counter.new 1 -- always at least two records, "." and ".."
   pure $! DirStream h fdat hasMore
+#endif
 
+#ifndef mingw32_HOST_OS
+openDirStream =
+  coerce . Posix.openDirStream . getOsString
+#endif
+
+-- | Deallocate directory handle. It’s not safe to call multiple times
+-- | on the same handle.
 closeDirStream :: DirStream -> IO ()
+
+#ifdef mingw32_HOST_OS
 closeDirStream (DirStream h _ _) = Win32.findClose h
+#endif
+
+#ifndef mingw32_HOST_OS
+closeDirStream = coerce Posix.closeDirStream
+#endif
 
 readDirStream :: DirStream -> IO (Maybe OsPath)
+
+#ifdef mingw32_HOST_OS
 readDirStream (DirStream h fdat hasMore) = go
   where
     go = do
@@ -53,27 +81,9 @@ readDirStream (DirStream h fdat hasMore) = go
         then go
         else pure $ Just $ OsString filename
       else pure Nothing
-
 #endif
 
--- Don’t use #else to make treesitter do better job - it parses #else part as comments.
 #ifndef mingw32_HOST_OS
-
-import System.OsPath.Types (OsPath)
-import System.OsString.Internal.Types (OsString(OsString), getOsString)
-import qualified System.Posix.Directory.PosixPath as Posix
-
--- | Abstract handle to directory contents.
-newtype DirStream = DirStream { unDirStream :: Posix.DirStream }
-
-openDirStream :: OsPath -> IO DirStream
-openDirStream = coerce . Posix.openDirStream . getOsString
-
-closeDirStream :: DirStream -> IO ()
-closeDirStream = coerce Posix.closeDirStream
-
-{-# INLINE readDirStream #-}
-readDirStream :: DirStream -> IO (Maybe OsPath)
 readDirStream (DirStream stream) = go
   where
 
@@ -101,4 +111,5 @@ readDirStream (DirStream stream) = go
           -> pure $ Just $ OsString fp'
 # endif
 
+{-# INLINE readDirStream #-}
 #endif
