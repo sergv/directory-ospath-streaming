@@ -118,6 +118,7 @@ library
   build-depends:
     , atomic-counter
     , base >= 4.12 && < 5
+    , ghc-prim
 
   if os(windows)
     build-depends:
@@ -127,6 +128,23 @@ library
     -- Cannot use lower version because it doesn’t support OsStrings
     build-depends:
       , unix >= 2.8
+
+executable sample
+  import: ghc-options
+  main-is:
+    Main.hs
+  hs-source-dirs:
+    exe
+  build-depends:
+    , base >= 4.16
+    , directory-ospath-streaming
+    , filepath
+    , tasty
+    , tasty-bench
+  ghc-options:
+    -rtsopts
+    -- -threaded
+    -- "-with-rtsopts=-N -A32M"
 
 test-suite test
   import: ghc-options, depends-on-filepath

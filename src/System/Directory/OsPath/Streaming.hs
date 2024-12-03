@@ -1,5 +1,8 @@
-{-# LANGUAGE CPP         #-}
-{-# LANGUAGE QuasiQuotes #-}
+{-# LANGUAGE BangPatterns  #-}
+{-# LANGUAGE CPP           #-}
+{-# LANGUAGE MagicHash     #-}
+{-# LANGUAGE QuasiQuotes   #-}
+{-# LANGUAGE UnboxedTuples #-}
 
 -- | Streaming functions for interacting with the filesystem.
 
@@ -8,6 +11,11 @@ module System.Directory.OsPath.Streaming
   , openDirStream
   , readDirStream
   , closeDirStream
+
+  , DirReadCache
+  , allocateDirReadCache
+  , releaseDirReadCache
+  , readDirStreamWithCache
   ) where
 
 import Data.Coerce (coerce)
@@ -27,6 +35,18 @@ import qualified System.Win32.WindowsString.File as Win32
 import System.OsPath.Types (OsPath)
 import System.OsString.Internal.Types (OsString(OsString), getOsString)
 import qualified System.Posix.Directory.PosixPath as Posix
+
+# if MIN_VERSION_unix(2, 8, 6)
+import Control.Monad ((>=>))
+import Foreign.Ptr (Ptr)
+import Foreign.Storable (sizeOf, alignment)
+import System.Posix.Directory.Internals (DirEnt, readDirStreamWithPtr, dirEntName)
+import System.Posix.PosixPath.FilePath (peekFilePath)
+
+import GHC.Prim (MutableByteArray#, newAlignedPinnedByteArray#, touch#, mutableByteArrayContents#, RealWorld)
+import GHC.Ptr (Ptr(..))
+import GHC.Types (IO(..), Int(..))
+# endif
 #endif
 
 #ifdef mingw32_HOST_OS
@@ -112,4 +132,98 @@ readDirStream (DirStream stream) = go
 # endif
 
 {-# INLINE readDirStream #-}
+#endif
+
+
+#ifdef mingw32_HOST_OS
+-- No state on Windows
+newtype DirReadCache = DirReadCache ()
+#endif
+
+#ifndef mingw32_HOST_OS
+
+# if !MIN_VERSION_unix(2, 8, 6)
+-- No state in early unix package
+newtype DirReadCache = DirReadCache ()
+# endif
+
+# if MIN_VERSION_unix(2, 8, 6)
+data DirReadCache = DirReadCache (MutableByteArray# RealWorld)
+# endif
+
+#endif
+
+
+allocateDirReadCache :: IO DirReadCache
+
+#ifdef mingw32_HOST_OS
+allocateDirReadCache = pure $ DirReadCache ()
+#endif
+
+#ifndef mingw32_HOST_OS
+
+# if !MIN_VERSION_unix(2, 8, 6)
+allocateDirReadCache = pure $ DirReadCache ()
+# endif
+
+# if MIN_VERSION_unix(2, 8, 6)
+allocateDirReadCache = IO $ \s0 ->
+   case newAlignedPinnedByteArray# size align s0 of
+     (# s1, mbarr# #) ->
+       (# s1, DirReadCache mbarr# #)
+  where
+    !(I# size)  = sizeOf    (undefined :: Ptr DirEnt)
+    !(I# align) = alignment (undefined :: Ptr DirEnt)
+# endif
+
+#endif
+
+releaseDirReadCache :: DirReadCache -> IO ()
+
+#ifdef mingw32_HOST_OS
+releaseDirReadCache _ = pure ()
+#endif
+
+#ifndef mingw32_HOST_OS
+
+# if !MIN_VERSION_unix(2, 8, 6)
+releaseDirReadCache _ = pure ()
+# endif
+
+# if MIN_VERSION_unix(2, 8, 6)
+releaseDirReadCache (DirReadCache barr#) = IO $ \s0 -> case touch# barr# s0 of
+  s1 -> (# s1, () #)
+# endif
+
+#endif
+
+
+readDirStreamWithCache :: DirReadCache -> DirStream -> IO (Maybe OsPath)
+#ifdef mingw32_HOST_OS
+readDirStreamWithCache _ = readDirStream
+#endif
+
+#ifndef mingw32_HOST_OS
+
+# if !MIN_VERSION_unix(2, 8, 6)
+readDirStreamWithCache _ = readDirStream
+# endif
+
+# if MIN_VERSION_unix(2, 8, 6)
+readDirStreamWithCache (DirReadCache barr#) (DirStream stream) = go
+  where
+    cache :: Ptr DirEnt
+    cache = Ptr (mutableByteArrayContents# barr#)
+    go = do
+      fp <- readDirStreamWithPtr cache (dirEntName >=> peekFilePath) stream
+      case fp of
+        Nothing -> pure Nothing
+        Just fp'
+          | fp' == getOsString [osp|.|] || fp' == getOsString [osp|..|]
+            -> go
+          | otherwise
+            -> pure $ Just $ OsString fp'
+  -- readDirStream stream
+# endif
+
 #endif

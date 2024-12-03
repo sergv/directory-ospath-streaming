@@ -1,4 +1,14 @@
 packages:
   directory-ospath-streaming.cabal
+  -- unix/unix.cabal
 
 tests: True
+
+-- debug-info: True
+
+package unix
+  tests: False
+
+constraints:
+  , unix >= 2.8.6
+  -- , unix < 2.8.6

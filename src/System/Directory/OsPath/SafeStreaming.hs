@@ -12,6 +12,11 @@ module System.Directory.OsPath.SafeStreaming
   , openDirStream
   , readDirStream
   , closeDirStream
+
+  , Streaming.DirReadCache
+  , Streaming.allocateDirReadCache
+  , Streaming.releaseDirReadCache
+  , readDirStreamWithCache
   ) where
 
 import Control.Concurrent.Counter (Counter)
@@ -43,3 +48,6 @@ closeDirStream DirStream{dsHandle, dsIsClosed} = do
 
 readDirStream :: DirStream -> IO (Maybe OsPath)
 readDirStream = Streaming.readDirStream . dsHandle
+
+readDirStreamWithCache :: Streaming.DirReadCache -> DirStream -> IO (Maybe OsPath)
+readDirStreamWithCache cache = Streaming.readDirStreamWithCache cache  . dsHandle
