@@ -24,19 +24,22 @@ import qualified Control.Concurrent.Counter as Counter
 import Control.Monad (when)
 import System.OsPath (OsPath)
 
+import System.Directory.OsPath.FileType (FileType)
 import qualified System.Directory.OsPath.Streaming as Streaming
+import System.Directory.OsPath.Types
 
 -- | Abstract handle to directory contents. Safe to close multiple times.
 data DirStream = DirStream
   { dsHandle   :: !Streaming.DirStream
   , dsIsClosed :: !Counter
+  , dsPath     :: OsPath
   }
 
 openDirStream :: OsPath -> IO DirStream
-openDirStream path = do
-  dsHandle   <- Streaming.openDirStream path
+openDirStream dsPath = do
+  dsHandle   <- Streaming.openDirStream dsPath
   dsIsClosed <- Counter.new 0
-  pure DirStream{dsHandle, dsIsClosed}
+  pure DirStream{dsHandle, dsIsClosed, dsPath}
 
 -- | Deallocate directory handle. It’s safe to close 'DirStream' multiple times,
 -- unlike the underlying OS-specific directory stream handle.
@@ -49,5 +52,9 @@ closeDirStream DirStream{dsHandle, dsIsClosed} = do
 readDirStream :: DirStream -> IO (Maybe OsPath)
 readDirStream = Streaming.readDirStream . dsHandle
 
-readDirStreamWithCache :: Streaming.DirReadCache -> DirStream -> IO (Maybe OsPath)
-readDirStreamWithCache cache = Streaming.readDirStreamWithCache cache  . dsHandle
+readDirStreamWithCache
+  :: Streaming.DirReadCache
+  -> DirStream
+  -> IO (Maybe (OsPath, Basename OsPath, FileType))
+readDirStreamWithCache cache DirStream{dsHandle, dsPath} =
+  Streaming.readDirStreamWithCache cache dsPath dsHandle

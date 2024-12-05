@@ -1,10 +1,13 @@
-{-# LANGUAGE BangPatterns  #-}
-{-# LANGUAGE CPP           #-}
-{-# LANGUAGE MagicHash     #-}
-{-# LANGUAGE QuasiQuotes   #-}
-{-# LANGUAGE UnboxedTuples #-}
+{-# LANGUAGE BangPatterns        #-}
+{-# LANGUAGE CPP                 #-}
+{-# LANGUAGE MagicHash           #-}
+{-# LANGUAGE QuasiQuotes         #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE UnboxedTuples       #-}
 
 -- | Streaming functions for interacting with the filesystem.
+
+{-# OPTIONS_GHC -ddump-simpl -dsuppress-uniques -dsuppress-idinfo -dsuppress-module-prefixes -dsuppress-type-applications -dsuppress-coercions -dppr-cols200 -dsuppress-type-signatures -ddump-to-file #-}
 
 module System.Directory.OsPath.Streaming
   ( DirStream
@@ -19,7 +22,10 @@ module System.Directory.OsPath.Streaming
   ) where
 
 import Data.Coerce (coerce)
-import System.OsPath (osp)
+import System.OsPath (osp, (</>))
+
+import System.Directory.OsPath.FileType
+import System.Directory.OsPath.Types
 
 #ifdef mingw32_HOST_OS
 import Control.Monad (unless)
@@ -37,10 +43,10 @@ import System.OsString.Internal.Types (OsString(OsString), getOsString)
 import qualified System.Posix.Directory.PosixPath as Posix
 
 # if MIN_VERSION_unix(2, 8, 6)
-import Control.Monad ((>=>))
-import Foreign.Ptr (Ptr)
-import Foreign.Storable (sizeOf, alignment)
-import System.Posix.Directory.Internals (DirEnt, readDirStreamWithPtr, dirEntName)
+import Foreign.C (CString, CChar)
+import Foreign.Ptr (Ptr, nullPtr)
+import Foreign.Storable (sizeOf, alignment, peekElemOff)
+import qualified System.Posix.Directory.Internals as DirInternals
 import System.Posix.PosixPath.FilePath (peekFilePath)
 
 import GHC.Prim (MutableByteArray#, newAlignedPinnedByteArray#, touch#, mutableByteArrayContents#, RealWorld)
@@ -172,8 +178,8 @@ allocateDirReadCache = IO $ \s0 ->
      (# s1, mbarr# #) ->
        (# s1, DirReadCache mbarr# #)
   where
-    !(I# size)  = sizeOf    (undefined :: Ptr DirEnt)
-    !(I# align) = alignment (undefined :: Ptr DirEnt)
+    !(I# size)  = sizeOf    (undefined :: Ptr DirInternals.DirEnt)
+    !(I# align) = alignment (undefined :: Ptr DirInternals.DirEnt)
 # endif
 
 #endif
@@ -198,31 +204,85 @@ releaseDirReadCache (DirReadCache barr#) = IO $ \s0 -> case touch# barr# s0 of
 #endif
 
 
-readDirStreamWithCache :: DirReadCache -> DirStream -> IO (Maybe OsPath)
+readDirStreamWithCache
+  :: DirReadCache
+  -> OsPath -- ^ Root that DirStream belongs to
+  -> DirStream
+  -> IO (Maybe (OsPath, Basename OsPath, FileType))
 #ifdef mingw32_HOST_OS
-readDirStreamWithCache _ = readDirStream
+readDirStreamWithCache _ _ = readDirStream
 #endif
 
 #ifndef mingw32_HOST_OS
 
 # if !MIN_VERSION_unix(2, 8, 6)
-readDirStreamWithCache _ = readDirStream
+readDirStreamWithCache _ _ = readDirStream
 # endif
 
 # if MIN_VERSION_unix(2, 8, 6)
-readDirStreamWithCache (DirReadCache barr#) (DirStream stream) = go
+readDirStreamWithCache (DirReadCache barr#) root (DirStream stream) = go
   where
-    cache :: Ptr DirEnt
+    cache :: Ptr DirInternals.DirEnt
     cache = Ptr (mutableByteArrayContents# barr#)
+
+    shouldSkipDirEntry :: CString -> IO Bool
+    shouldSkipDirEntry ptr
+      | ptr == nullPtr = pure True
+    shouldSkipDirEntry ptr = do
+      (x1 :: CChar) <- peekElemOff ptr 0
+      case x1 of
+        0  -> pure False
+        46 -> do -- ASCII for ‘.’
+          (x2 :: CChar) <- peekElemOff ptr 1
+          case x2 of
+            0  -> pure True
+            46 -> do -- ASCII for ‘.’
+              (x3 :: CChar) <- peekElemOff ptr 2
+              pure $! x3 == 0
+            _  -> pure False
+        _  -> pure False
+
+    go :: IO (Maybe (OsPath, Basename OsPath, FileType))
     go = do
-      fp <- readDirStreamWithPtr cache (dirEntName >=> peekFilePath) stream
-      case fp of
-        Nothing -> pure Nothing
-        Just fp'
-          | fp' == getOsString [osp|.|] || fp' == getOsString [osp|..|]
-            -> go
-          | otherwise
-            -> pure $ Just $ OsString fp'
+      x <- DirInternals.readDirStreamWithPtr
+        cache
+        (\dirEnt -> do
+          (namePtr :: CString) <- DirInternals.dirEntName dirEnt
+
+          shouldSkip <- shouldSkipDirEntry namePtr
+
+          if shouldSkip
+          then
+            pure Nothing
+          else do
+            !path <- peekFilePath namePtr
+
+            let fullPath = root </> coerce path
+
+            !typ  <- DirInternals.dirEntType dirEnt
+
+            typ' <- case typ of
+              DirInternals.UnknownType         -> getFileType fullPath
+              DirInternals.NamedPipeType       -> pure Other
+              DirInternals.CharacterDeviceType -> pure Other
+              DirInternals.DirectoryType       -> pure Directory
+              DirInternals.BlockDeviceType     -> pure Other
+              DirInternals.RegularFileType     -> pure File
+              DirInternals.SymbolicLinkType    -> getFileType fullPath
+              DirInternals.SocketType          -> pure Other
+              DirInternals.WhiteoutType        -> pure Other
+              -- Unaccounted type, probably should not happeen since the
+              -- list above is exhaustive.
+              _                                -> getFileType fullPath
+
+            pure (Just (fullPath, Basename $ coerce path, typ')))
+        stream
+
+      case x of
+        Nothing           -> pure Nothing
+        Just Nothing      -> go
+        Just res@(Just _) -> pure res
+
   -- readDirStream stream
 # endif
 

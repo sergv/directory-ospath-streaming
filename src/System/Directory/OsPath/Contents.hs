@@ -8,8 +8,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 
 module System.Directory.OsPath.Contents
-  ( Rel(..)
-  , getDirectoryContentsRecursive
+  ( getDirectoryContentsRecursive
 
   , listContentsRecFold
   ) where
@@ -21,9 +20,7 @@ import System.OsPath
 import qualified System.Directory.OsPath.FileType as Streaming
 import System.Directory.OsPath.SafeStreaming
 import qualified System.Directory.OsPath.SafeStreaming as Streaming
-
--- | Relative filename, without directory separators
-newtype Rel a = Rel { unRel :: a }
+import System.Directory.OsPath.Types
 
 -- | List all the files in a directory and all subdirectories.
 --
@@ -38,70 +35,85 @@ getDirectoryContentsRecursive
 getDirectoryContentsRecursive root =
   listContentsRecFold
     Nothing
-    (\_ _ _ subdir rest -> subdir rest)
+    (\_ _ _ prependSubdir -> pure $ \rest -> prependSubdir rest)
     (\absPath _ _ -> pure (Just absPath))
     (Just root)
+Endo
 
 {-# INLINE listContentsRecFold #-}
--- | General form of gathering directory contents.
+-- | The most general form of gathering directory contents (so far).
 --
 -- Treats symlinks the same as regular files and directories. Folding functions can
 -- decide how to handle symlinks.
+--
+-- Both directory and file actions can throw exceptions and this function
+-- will try extra hard not to leak opened directory stream resources (you will
+-- spend some effort too thanks to interesting type signatures that make this possible).
 listContentsRecFold
   :: forall f a. Foldable f
   => Maybe Int
   -- ^ Depth limit if specified, negative values treated the same as positive ones.
-  -> (OsPath -> Rel OsPath -> Streaming.FileType -> (IO [a] -> IO [a]) -> IO [a] -> IO [a])
-  -- ^ Fold directory by running passed IO action that will scan its contents.
-  -- Can ignore the action to avoid traversing the directory.
-  -> (OsPath -> Rel OsPath -> Streaming.FileType -> IO (Maybe a))
+  -> (OsPath -> Basename OsPath -> Streaming.FileType -> (IO [a] -> IO [a]) -> IO (IO [a] -> IO [a]))
+  -- ^ Prepare to fold directory given its path.
+  --
+  -- Can do IO actions to plan what to do and must produce function of
+  -- type @IO [a] -> IO [a]@ that will receive IO action analyzing the
+  -- rest of the filesystem (@IO [a]@) and return final result (i.e. result from
+  -- analyzing the rest plus results for this directory on top).
+  --
+  -- The passed @(IO [a] -> IO [a])@ argument function should (but is not required to)
+  -- be applied in the returned function and it will prepend results for subdirectories
+  -- of the directory being analyzed. If not applied thes subdirectories will be skipped,
+  -- this way ignoring particular directory and all its children can be achieved.
+  -> (OsPath -> Basename OsPath -> Streaming.FileType -> IO (Maybe a))
   -- ^ What to do with file
   -> f OsPath
   -- ^ Roots to search in, either absolute or relative
   -> IO [a]
-listContentsRecFold depthLimit foldDir filePred input = do
-  cache <- Streaming.allocateDirReadCache
-  listContentsRecFold' cache
+listContentsRecFold depthLimit foldDir filePred input =
+  listContentsRecFold' =<< Streaming.allocateDirReadCache
   where
     listContentsRecFold' cache =
       foldr (goNewDir initLimit) (Streaming.releaseDirReadCache cache *> pure []) input
       where
-      !initLimit = case depthLimit of
-        Nothing -> (- 1) -- Loop until overflow, basically infinitely
-        Just x  -> abs x
+        !initLimit = case depthLimit of
+          Nothing -> -1 -- Loop until overflow, basically infinitely
+          Just x  -> abs x
 
-      goNewDir :: Int -> OsPath -> IO [a] -> IO [a]
-      goNewDir !d dir rest = do
-        mask $ \restore -> do
-          stream <- Streaming.openDirStream dir
-          onException
+        goNewDir :: Int -> OsPath -> IO [a] -> IO [a]
+        goNewDir !d dir rest = do
+          mask $ \restore -> do
+            stream <- Streaming.openDirStream dir
             (restore
-              (goDirStream d dir (Streaming.closeDirStream stream *> rest) stream))
-            (Streaming.closeDirStream stream)
+              (goDirStream d (Streaming.closeDirStream stream *> rest) stream))
 
-      goDirStream :: Int -> OsPath -> IO [a] -> DirStream -> IO [a]
-      goDirStream !d dir rest stream = go d
-        where
-          go :: Int -> IO [a]
-          go 0     = rest
-          go depth = do
-            x <- Streaming.readDirStream stream
-            case x of
-              Nothing -> rest
-              Just y  -> do
-                let y' :: OsPath
-                    y' = dir </> y
-                ft <- Streaming.getFileType y'
-                case ft of
-                  Streaming.Other        -> addLazy (filePred y' (Rel y) ft) (go depth)
-                  Streaming.File         -> addLazy (filePred y' (Rel y) ft) (go depth)
-                  Streaming.FileSym      -> addLazy (filePred y' (Rel y) ft) (go depth)
-                  Streaming.Directory    -> foldDir y' (Rel y) ft (goNewDir (depth - 1) y') (go depth)
-                  Streaming.DirectorySym -> foldDir y' (Rel y) ft (goNewDir (depth - 1) y') (go depth)
+        goDirStream :: Int -> IO [a] -> DirStream -> IO [a]
+        goDirStream 0     rest _      = rest
+        goDirStream depth rest stream = go
+          where
+            go :: IO [a]
+            go = do
+              x <- Streaming.readDirStreamWithCache cache stream `onException`
+                Streaming.closeDirStream stream
+              case x of
+                Nothing          -> rest
+                Just (y', y, ft) -> do
+                  case ft of
+                    Streaming.Other        -> addLazy (filePred y' y ft) go
+                    Streaming.File         -> addLazy (filePred y' y ft) go
+                    Streaming.FileSym      -> addLazy (filePred y' y ft) go
+                    Streaming.Directory    -> do
+                      k <- foldDir y' y ft (goNewDir (depth - 1) y') `onException`
+                        Streaming.closeDirStream stream
+                      k go
+                    Streaming.DirectorySym -> do
+                      k <- foldDir y' y ft (goNewDir (depth - 1) y') `onException`
+                        Streaming.closeDirStream stream
+                      k go
 
-      addLazy :: IO (Maybe a) -> IO [a] -> IO [a]
-      addLazy x y = do
-        x' <- x
-        case x' of
-          Nothing  -> y
-          Just x'' -> (x'' :) <$> unsafeInterleaveIO y
+            addLazy :: IO (Maybe a) -> IO [a] -> IO [a]
+            addLazy x y = do
+              x' <- x `onException` Streaming.closeDirStream stream
+              case x' of
+                Nothing  -> y
+                Just x'' -> (x'' :) <$> unsafeInterleaveIO y

@@ -113,6 +113,7 @@ library
     System.Directory.OsPath.FileType
     System.Directory.OsPath.Streaming
     System.Directory.OsPath.SafeStreaming
+    System.Directory.OsPath.Types
   hs-source-dirs:
     src
   build-depends:
@@ -145,6 +146,24 @@ executable sample
     -rtsopts
     -- -threaded
     -- "-with-rtsopts=-N -A32M"
+
+executable test-lazy-io
+  import: ghc-options
+  main-is:
+    TestLazyIO.hs
+  hs-source-dirs:
+    exe
+  build-depends:
+    , base >= 4.16
+    , directory-ospath-streaming
+    , filepath
+    , tasty
+    , tasty-bench
+  ghc-options:
+    -rtsopts
+    -- -threaded
+    -- "-with-rtsopts=-N -A32M"
+    -main-is TestLazyIO
 
 test-suite test
   import: ghc-options, depends-on-filepath
