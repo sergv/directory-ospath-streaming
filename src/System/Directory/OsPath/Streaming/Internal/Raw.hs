@@ -29,7 +29,6 @@ module System.Directory.OsPath.Streaming.Internal.Raw
   , readRawDirStreamWithCache
   ) where
 
-import Data.Coerce (coerce)
 import System.OsPath (osp, (</>))
 
 import System.Directory.OsPath.FileType
@@ -38,7 +37,7 @@ import System.Directory.OsPath.Types
 #ifdef mingw32_HOST_OS
 import Control.Concurrent.Counter (Counter)
 import qualified Control.Concurrent.Counter as Counter
-import Control.Monad (unless, (<=<))
+import Control.Monad (unless)
 import System.OsPath.Types (OsPath)
 import System.OsString.Internal.Types (OsString(OsString), getOsString)
 import System.OsString.Windows (pstr)
@@ -52,11 +51,8 @@ import System.OsPath.Types (OsPath)
 import System.OsString.Internal.Types (OsString(OsString), getOsString)
 import qualified System.Posix.Directory.PosixPath as Posix
 
-# if !MIN_VERSION_unix(2, 8, 6)
-import Control.Monad ((<=<))
-# endif
-
 # if MIN_VERSION_unix(2, 8, 6)
+import Data.Coerce (coerce)
 import Foreign.C (CString, CChar)
 import Foreign.Ptr (Ptr, nullPtr)
 import Foreign.Storable (sizeOf, alignment, peekElemOff)
@@ -74,10 +70,10 @@ import GHC.Types (IO(..), Int(..))
 -- Not thread safe and shouldn't be closed more than once.
 
 #ifdef mingw32_HOST_OS
-data RawDirStream = RawDirStream !Win32.HANDLE !Win32.FindData !Counter
+data RawDirStream = RawDirStream !Win32.HANDLE !Win32.FindData !Counter !OsPath
 #endif
 #ifndef mingw32_HOST_OS
-newtype RawDirStream = RawDirStream Posix.DirStream
+data RawDirStream = RawDirStream !Posix.DirStream !OsPath
 #endif
 
 openRawDirStream :: OsPath -> IO RawDirStream
@@ -85,12 +81,13 @@ openRawDirStream :: OsPath -> IO RawDirStream
 openRawDirStream fp = do
   (h, fdat) <- Win32.findFirstFile $ getOsString fp <> [pstr|\*|]
   hasMore <- Counter.new 1 -- always at least two records, "." and ".."
-  pure $! RawDirStream h fdat hasMore
+  pure $! RawDirStream h fdat hasMore fp
 #endif
 
 #ifndef mingw32_HOST_OS
-openRawDirStream =
-  coerce . Posix.openDirStream . getOsString
+openRawDirStream root = do
+  stream <- Posix.openDirStream (getOsString root)
+  pure $ RawDirStream stream root
 #endif
 
 -- | Deallocate directory handle. It’s not safe to call multiple times
@@ -98,63 +95,20 @@ openRawDirStream =
 closeRawDirStream :: RawDirStream -> IO ()
 
 #ifdef mingw32_HOST_OS
-closeRawDirStream (RawDirStream h _ _) = Win32.findClose h
+closeRawDirStream (RawDirStream h _ _ _) = Win32.findClose h
 #endif
-
 #ifndef mingw32_HOST_OS
-closeRawDirStream = coerce Posix.closeDirStream
+closeRawDirStream (RawDirStream stream _) = Posix.closeDirStream stream
 #endif
 
-readRawDirStream :: RawDirStream -> IO (Maybe OsPath)
-
-#ifdef mingw32_HOST_OS
-readRawDirStream (RawDirStream h fdat hasMore) = go
-  where
-    go = do
-      hasMore' <- Counter.get hasMore
-      if hasMore' /= 0
-      then do
-        filename  <- Win32.getFindDataFileName fdat
-        hasMore'' <- Win32.findNextFile h fdat
-        unless hasMore'' $
-          Counter.set hasMore 0
-        if filename == getOsString [osp|.|] || filename == getOsString [osp|..|]
-        then go
-        else pure $ Just $ OsString filename
-      else pure Nothing
-#endif
-
-#ifndef mingw32_HOST_OS
-readRawDirStream (RawDirStream stream) = go
-  where
-
-# if !MIN_VERSION_unix(2, 8, 6)
-    go = do
-      fp <- Posix.readDirStream stream
-      case () of
-        _ | fp == mempty
-          -> pure Nothing
-          | fp == getOsString [osp|.|] || fp == getOsString [osp|..|]
-          -> go
-          | otherwise
-          -> pure $ Just $ OsString fp
-# endif
-
-# if MIN_VERSION_unix(2, 8, 6)
-    go = do
-      fp <- Posix.readDirStreamMaybe stream
-      case fp of
-        Nothing -> pure Nothing
-        Just fp'
-          | fp' == getOsString [osp|.|] || fp' == getOsString [osp|..|]
-          -> go
-          | otherwise
-          -> pure $ Just $ OsString fp'
-# endif
-
-{-# INLINE readRawDirStream #-}
-#endif
-
+readRawDirStream :: RawDirStream -> IO (Maybe (OsPath, FileType))
+readRawDirStream stream = do
+  cache <- allocateDirReadCache
+  res   <- readRawDirStreamWithCache cache stream
+  -- Safe to don’t care about exceptions because we know that cache is
+  -- just a byte vector so just touch# it for now.
+  releaseDirReadCache cache
+  pure $ (\(_, Basename x, typ) -> (x, typ)) <$> res
 
 #ifdef mingw32_HOST_OS
 -- No state on Windows
@@ -216,22 +170,21 @@ releaseDirReadCache (DirReadCache barr#) =
 
 readRawDirStreamWithCache
   :: DirReadCache
-  -> OsPath -- ^ Root that RawDirStream belongs to
   -> RawDirStream
   -> IO (Maybe (OsPath, Basename OsPath, FileType))
 #ifdef mingw32_HOST_OS
-readRawDirStreamWithCache _ dir = do
-  traverse (\x -> let full = dir </> x in (full, Basename x,) <$> getFileType full) <=< readRawDirStream
+readRawDirStreamWithCache _ stream@(RawDirStream _ root) = do
+  traverse (\x -> let full = root </> x in (full, Basename x,) <$> getFileType full) =<< readRawDirStreamSimple stream
 #endif
 #ifndef mingw32_HOST_OS
 
 # if !MIN_VERSION_unix(2, 8, 6)
-readRawDirStreamWithCache _ dir = do
-  traverse (\x -> let full = dir </> x in (full, Basename x,) <$> getFileType full) <=< readRawDirStream
+readRawDirStreamWithCache _ stream@(RawDirStream _ root) = do
+  traverse (\x -> let full = root </> x in (full, Basename x,) <$> getFileType full) =<< readRawDirStreamSimple stream
 # endif
 
 # if MIN_VERSION_unix(2, 8, 6)
-readRawDirStreamWithCache (DirReadCache barr#) root (RawDirStream stream) = go
+readRawDirStreamWithCache (DirReadCache barr#) (RawDirStream stream root) = go
   where
     cache :: Ptr DirInternals.DirEnt
     cache = Ptr (mutableByteArrayContents# barr#)
@@ -295,3 +248,49 @@ readRawDirStreamWithCache (DirReadCache barr#) root (RawDirStream stream) = go
         Just res@(Just _) -> pure res
 # endif
 #endif
+
+readRawDirStreamSimple :: RawDirStream -> IO (Maybe OsPath)
+
+#ifdef mingw32_HOST_OS
+readRawDirStreamSimple (RawDirStream h fdat hasMore _) = go
+  where
+    go = do
+      hasMore' <- Counter.get hasMore
+      if hasMore' /= 0
+      then do
+        filename  <- Win32.getFindDataFileName fdat
+        hasMore'' <- Win32.findNextFile h fdat
+        unless hasMore'' $
+          Counter.set hasMore 0
+        if filename == getOsString [osp|.|] || filename == getOsString [osp|..|]
+        then go
+        else pure $ Just $ OsString filename
+      else pure Nothing
+#endif
+#ifndef mingw32_HOST_OS
+readRawDirStreamSimple (RawDirStream stream _) = go
+  where
+# if !MIN_VERSION_unix(2, 8, 6)
+    go = do
+      fp <- Posix.readDirStream stream
+      case () of
+        _ | fp == mempty
+          -> pure Nothing
+          | fp == getOsString [osp|.|] || fp == getOsString [osp|..|]
+          -> go
+          | otherwise
+          -> pure $ Just $ OsString fp
+# endif
+# if MIN_VERSION_unix(2, 8, 6)
+    go = do
+      fp <- Posix.readDirStreamMaybe stream
+      case fp of
+        Nothing -> pure Nothing
+        Just fp'
+          | fp' == getOsString [osp|.|] || fp' == getOsString [osp|..|]
+          -> go
+          | otherwise
+          -> pure $ Just $ OsString fp'
+# endif
+#endif
+

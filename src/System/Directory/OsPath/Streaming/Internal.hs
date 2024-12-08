@@ -33,17 +33,16 @@ import System.Directory.OsPath.Types
 -- May be closed multiple times and will be automatically closed by GC
 -- when it goes out of scope.
 data DirStream = DirStream
-  { dsHandle   :: {-# UNPACK #-} !Raw.RawDirStream
+  { dsHandle   :: !Raw.RawDirStream
   , dsIsClosed :: {-# UNPACK #-} !Counter
-  , dsPath     :: OsPath
   , dsFin      :: {-# UNPACK #-} !(Weak DirStream)
   }
 
 openDirStream :: OsPath -> IO DirStream
-openDirStream dsPath = mdo
-  dsHandle   <- Raw.openRawDirStream dsPath
+openDirStream root = mdo
+  dsHandle   <- Raw.openRawDirStream root
   dsIsClosed <- Counter.new 0
-  let result = DirStream{dsHandle, dsIsClosed, dsPath, dsFin}
+  let result = DirStream{dsHandle, dsIsClosed, dsFin}
   dsFin <- mkWeak result result (Just (closeDirStreamInternal result))
   pure result
 
@@ -61,12 +60,12 @@ closeDirStreamInternal DirStream{dsHandle, dsIsClosed} = do
   when (oldVal == 0) $
     Raw.closeRawDirStream dsHandle
 
-readDirStream :: DirStream -> IO (Maybe OsPath)
+readDirStream :: DirStream -> IO (Maybe (OsPath, FileType))
 readDirStream = Raw.readRawDirStream . dsHandle
 
 readDirStreamWithCache
   :: Raw.DirReadCache
   -> DirStream
   -> IO (Maybe (OsPath, Basename OsPath, FileType))
-readDirStreamWithCache cache DirStream{dsHandle, dsPath} =
-  Raw.readRawDirStreamWithCache cache dsPath dsHandle
+readDirStreamWithCache cache =
+  Raw.readRawDirStreamWithCache cache . dsHandle
