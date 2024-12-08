@@ -43,7 +43,7 @@ tests = testGroup "Tests"
         Just y <- readDirStream ds
         Just z <- readDirStream ds
         return $ L.sort [w, x, y, z]
-      res @?= [[osp|bar.txt|], [osp|baz.txt|], [osp|bin|], [osp|foo.txt|]]
+      res @?= [([osp|bar.txt|], File Regular), ([osp|baz.txt|], File Regular), ([osp|bin|], Directory Regular), ([osp|foo.txt|], File Regular)]
   , testGroup "getFileType general"
       [ testCase "file" $ do
           getFileType [osp|directory-ospath-streaming.cabal|] >>= (@?= File Regular)
