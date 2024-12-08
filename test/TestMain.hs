@@ -78,7 +78,7 @@ tests = testGroup "Tests"
         , testCase "other" $ do
             tmp <- mkTmpDir
             let dest = tmp </> [osp|tmp3|]
-            res    <- tryIO $ Posix.createNamedPipe (getOsString dest) 0
+            res <- tryIO $ Posix.createNamedPipe (getOsString dest) 0
             case res of
               -- Creating named pipe might fail on some filesystems
               Left _  -> pure ()
