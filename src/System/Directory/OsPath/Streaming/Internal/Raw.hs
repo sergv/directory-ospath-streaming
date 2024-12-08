@@ -3,6 +3,11 @@
 -- Copyright:  (c) Sergey Vinokurov 2024
 -- License:    Apache-2.0 (see LICENSE)
 -- Maintainer: serg.foo@gmail.com
+--
+-- Streaming functions for interacting with the filesystem.
+--
+-- These do the basic job of reading directory entries but care must
+-- be taken to not close these streams more than once.
 
 {-# LANGUAGE BangPatterns        #-}
 {-# LANGUAGE CPP                 #-}
@@ -12,24 +17,18 @@
 {-# LANGUAGE TupleSections       #-}
 {-# LANGUAGE UnboxedTuples       #-}
 
--- | Streaming functions for interacting with the filesystem.
---
--- These do the basic job of reading directory entries but care must
--- be taken to not close these streams more than once.
-
 module System.Directory.OsPath.Streaming.Internal.Raw
-  ( DirStream(..)
-  , openDirStream
-  , readDirStream
-  , closeDirStream
+  ( RawDirStream(..)
+  , openRawDirStream
+  , readRawDirStream
+  , closeRawDirStream
 
   , DirReadCache(..)
   , allocateDirReadCache
   , releaseDirReadCache
-  , readDirStreamWithCache
+  , readRawDirStreamWithCache
   ) where
 
-import Control.Monad ((<=<))
 import Data.Coerce (coerce)
 import System.OsPath (osp, (</>))
 
@@ -39,7 +38,7 @@ import System.Directory.OsPath.Types
 #ifdef mingw32_HOST_OS
 import Control.Concurrent.Counter (Counter)
 import qualified Control.Concurrent.Counter as Counter
-import Control.Monad (unless)
+import Control.Monad (unless, (<=<))
 import System.OsPath.Types (OsPath)
 import System.OsString.Internal.Types (OsString(OsString), getOsString)
 import System.OsString.Windows (pstr)
@@ -52,6 +51,10 @@ import qualified System.Win32.WindowsString.File as Win32
 import System.OsPath.Types (OsPath)
 import System.OsString.Internal.Types (OsString(OsString), getOsString)
 import qualified System.Posix.Directory.PosixPath as Posix
+
+# if !MIN_VERSION_unix(2, 8, 6)
+import Control.Monad ((<=<))
+# endif
 
 # if MIN_VERSION_unix(2, 8, 6)
 import Foreign.C (CString, CChar)
@@ -71,41 +74,41 @@ import GHC.Types (IO(..), Int(..))
 -- Not thread safe and shouldn't be closed more than once.
 
 #ifdef mingw32_HOST_OS
-data DirStream = DirStream !Win32.HANDLE !Win32.FindData !Counter
+data RawDirStream = RawDirStream !Win32.HANDLE !Win32.FindData !Counter
 #endif
 #ifndef mingw32_HOST_OS
-newtype DirStream = DirStream Posix.DirStream
+newtype RawDirStream = RawDirStream Posix.DirStream
 #endif
 
-openDirStream :: OsPath -> IO DirStream
+openRawDirStream :: OsPath -> IO RawDirStream
 #ifdef mingw32_HOST_OS
-openDirStream fp = do
+openRawDirStream fp = do
   (h, fdat) <- Win32.findFirstFile $ getOsString fp <> [pstr|\*|]
   hasMore <- Counter.new 1 -- always at least two records, "." and ".."
-  pure $! DirStream h fdat hasMore
+  pure $! RawDirStream h fdat hasMore
 #endif
 
 #ifndef mingw32_HOST_OS
-openDirStream =
+openRawDirStream =
   coerce . Posix.openDirStream . getOsString
 #endif
 
 -- | Deallocate directory handle. It’s not safe to call multiple times
 -- on the same handle.
-closeDirStream :: DirStream -> IO ()
+closeRawDirStream :: RawDirStream -> IO ()
 
 #ifdef mingw32_HOST_OS
-closeDirStream (DirStream h _ _) = Win32.findClose h
+closeRawDirStream (RawDirStream h _ _) = Win32.findClose h
 #endif
 
 #ifndef mingw32_HOST_OS
-closeDirStream = coerce Posix.closeDirStream
+closeRawDirStream = coerce Posix.closeDirStream
 #endif
 
-readDirStream :: DirStream -> IO (Maybe OsPath)
+readRawDirStream :: RawDirStream -> IO (Maybe OsPath)
 
 #ifdef mingw32_HOST_OS
-readDirStream (DirStream h fdat hasMore) = go
+readRawDirStream (RawDirStream h fdat hasMore) = go
   where
     go = do
       hasMore' <- Counter.get hasMore
@@ -122,7 +125,7 @@ readDirStream (DirStream h fdat hasMore) = go
 #endif
 
 #ifndef mingw32_HOST_OS
-readDirStream (DirStream stream) = go
+readRawDirStream (RawDirStream stream) = go
   where
 
 # if !MIN_VERSION_unix(2, 8, 6)
@@ -149,7 +152,7 @@ readDirStream (DirStream stream) = go
           -> pure $ Just $ OsString fp'
 # endif
 
-{-# INLINE readDirStream #-}
+{-# INLINE readRawDirStream #-}
 #endif
 
 
@@ -211,24 +214,24 @@ releaseDirReadCache (DirReadCache barr#) =
 #endif
 
 
-readDirStreamWithCache
+readRawDirStreamWithCache
   :: DirReadCache
-  -> OsPath -- ^ Root that DirStream belongs to
-  -> DirStream
+  -> OsPath -- ^ Root that RawDirStream belongs to
+  -> RawDirStream
   -> IO (Maybe (OsPath, Basename OsPath, FileType))
 #ifdef mingw32_HOST_OS
-readDirStreamWithCache _ dir = do
-  traverse (\x -> let full = dir </> x in (full, Basename x,) <$> getFileType full) <=< readDirStream
+readRawDirStreamWithCache _ dir = do
+  traverse (\x -> let full = dir </> x in (full, Basename x,) <$> getFileType full) <=< readRawDirStream
 #endif
 #ifndef mingw32_HOST_OS
 
 # if !MIN_VERSION_unix(2, 8, 6)
-readDirStreamWithCache _ dir = do
-  traverse (\x -> let full = dir </> x in (full, Basename x,) <$> getFileType full) <=< readDirStream
+readRawDirStreamWithCache _ dir = do
+  traverse (\x -> let full = dir </> x in (full, Basename x,) <$> getFileType full) <=< readRawDirStream
 # endif
 
 # if MIN_VERSION_unix(2, 8, 6)
-readDirStreamWithCache (DirReadCache barr#) root (DirStream stream) = go
+readRawDirStreamWithCache (DirReadCache barr#) root (RawDirStream stream) = go
   where
     cache :: Ptr DirInternals.DirEnt
     cache = Ptr (mutableByteArrayContents# barr#)
