@@ -17,6 +17,12 @@
 {-# LANGUAGE TupleSections       #-}
 {-# LANGUAGE UnboxedTuples       #-}
 
+#ifndef mingw32_HOST_OS
+# if MIN_VERSION_unix(2, 8, 6) && __GLASGOW_HASKELL__ >= 902
+#  define HAVE_UNIX_CACHE 1
+# endif
+#endif
+
 module System.Directory.OsPath.Streaming.Internal.Raw
   ( RawDirStream(..)
   , openRawDirStream
@@ -51,7 +57,7 @@ import System.OsPath.Types (OsPath)
 import System.OsString.Internal.Types (OsString(OsString), getOsString)
 import qualified System.Posix.Directory.PosixPath as Posix
 
-# if MIN_VERSION_unix(2, 8, 6)
+# ifdef HAVE_UNIX_CACHE
 import Data.Coerce (coerce)
 import Foreign.C (CString, CChar)
 import Foreign.Ptr (Ptr, nullPtr)
@@ -118,12 +124,12 @@ newtype DirReadCache = DirReadCache ()
 
 #ifndef mingw32_HOST_OS
 
-# if !MIN_VERSION_unix(2, 8, 6)
+# ifndef HAVE_UNIX_CACHE
 -- No state in early unix package
 newtype DirReadCache = DirReadCache ()
 # endif
 
-# if MIN_VERSION_unix(2, 8, 6)
+# ifdef HAVE_UNIX_CACHE
 data DirReadCache = DirReadCache (MutableByteArray# RealWorld)
 # endif
 
@@ -136,11 +142,10 @@ allocateDirReadCache = pure $ DirReadCache ()
 #endif
 
 #ifndef mingw32_HOST_OS
-# if !MIN_VERSION_unix(2, 8, 6)
+# ifndef HAVE_UNIX_CACHE
 allocateDirReadCache = pure $ DirReadCache ()
 # endif
-
-# if MIN_VERSION_unix(2, 8, 6)
+# ifdef HAVE_UNIX_CACHE
 allocateDirReadCache = IO $ \s0 ->
   case newAlignedPinnedByteArray# size align s0 of
     (# s1, mbarr# #) ->
@@ -158,11 +163,10 @@ releaseDirReadCache _ = pure ()
 #endif
 #ifndef mingw32_HOST_OS
 
-# if !MIN_VERSION_unix(2, 8, 6)
+# ifndef HAVE_UNIX_CACHE
 releaseDirReadCache _ = pure ()
 # endif
-
-# if MIN_VERSION_unix(2, 8, 6)
+# ifdef HAVE_UNIX_CACHE
 releaseDirReadCache (DirReadCache barr#) =
   IO $ \s0 -> case touch# barr# s0 of s1 -> (# s1, () #)
 # endif
@@ -175,16 +179,15 @@ readRawDirStreamWithCache
   -> IO (Maybe (OsPath, Basename OsPath, FileType))
 #ifdef mingw32_HOST_OS
 readRawDirStreamWithCache _ stream@(RawDirStream _ _ _ root) = do
-  traverse (\x -> let full = root </> x in (full, Basename x,) <$> getFileType full) =<< readRawDirStreamSimple stream
+  traverse (\x -> let full = root </> x in (full, Basename x,) <$> getFileType full) =<< _readRawDirStreamSimple stream
 #endif
 #ifndef mingw32_HOST_OS
 
-# if !MIN_VERSION_unix(2, 8, 6)
+# ifndef HAVE_UNIX_CACHE
 readRawDirStreamWithCache _ stream@(RawDirStream _ root) = do
-  traverse (\x -> let full = root </> x in (full, Basename x,) <$> getFileType full) =<< readRawDirStreamSimple stream
+  traverse (\x -> let full = root </> x in (full, Basename x,) <$> getFileType full) =<< _readRawDirStreamSimple stream
 # endif
-
-# if MIN_VERSION_unix(2, 8, 6)
+# ifdef HAVE_UNIX_CACHE
 readRawDirStreamWithCache (DirReadCache barr#) (RawDirStream stream root) = go
   where
     cache :: Ptr DirInternals.DirEnt
@@ -250,10 +253,10 @@ readRawDirStreamWithCache (DirReadCache barr#) (RawDirStream stream root) = go
 # endif
 #endif
 
-readRawDirStreamSimple :: RawDirStream -> IO (Maybe OsPath)
+_readRawDirStreamSimple :: RawDirStream -> IO (Maybe OsPath)
 
 #ifdef mingw32_HOST_OS
-readRawDirStreamSimple (RawDirStream h fdat hasMore _) = go
+_readRawDirStreamSimple (RawDirStream h fdat hasMore _) = go
   where
     go = do
       hasMore' <- Counter.get hasMore
@@ -269,9 +272,9 @@ readRawDirStreamSimple (RawDirStream h fdat hasMore _) = go
       else pure Nothing
 #endif
 #ifndef mingw32_HOST_OS
-readRawDirStreamSimple (RawDirStream stream _) = go
+_readRawDirStreamSimple (RawDirStream stream _) = go
   where
-# if !MIN_VERSION_unix(2, 8, 6)
+# ifndef HAVE_UNIX_CACHE
     go = do
       fp <- Posix.readDirStream stream
       case () of
@@ -282,7 +285,7 @@ readRawDirStreamSimple (RawDirStream stream _) = go
           | otherwise
           -> pure $ Just $ OsString fp
 # endif
-# if MIN_VERSION_unix(2, 8, 6)
+# ifdef HAVE_UNIX_CACHE
     go = do
       fp <- Posix.readDirStreamMaybe stream
       case fp of
