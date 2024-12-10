@@ -173,7 +173,7 @@ readRawDirStreamWithCache
   -> RawDirStream
   -> IO (Maybe (OsPath, Basename OsPath, FileType))
 #ifdef mingw32_HOST_OS
-readRawDirStreamWithCache _ stream@(RawDirStream _ root) = do
+readRawDirStreamWithCache _ stream@(RawDirStream _ _ _ root) = do
   traverse (\x -> let full = root </> x in (full, Basename x,) <$> getFileType full) =<< readRawDirStreamSimple stream
 #endif
 #ifndef mingw32_HOST_OS
