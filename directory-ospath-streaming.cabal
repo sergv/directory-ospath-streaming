@@ -128,7 +128,6 @@ library
       , Win32 >= 2.13.3
   else
     build-depends:
-      , ghc-prim
       -- Cannot use lower version because it doesn’t support OsStrings
       , unix >= 2.8
 

@@ -59,9 +59,10 @@ import Foreign.Storable (sizeOf, alignment, peekElemOff)
 import qualified System.Posix.Directory.Internals as DirInternals
 import System.Posix.PosixPath.FilePath (peekFilePath)
 
-import GHC.Prim (MutableByteArray#, newAlignedPinnedByteArray#, touch#, mutableByteArrayContents#, RealWorld)
+import GHC.Exts (MutableByteArray#, newAlignedPinnedByteArray#, touch#, mutableByteArrayContents#, RealWorld)
+import GHC.IO (IO(..))
+import GHC.Int (Int(..))
 import GHC.Ptr (Ptr(..))
-import GHC.Types (IO(..), Int(..))
 # endif
 #endif
 
