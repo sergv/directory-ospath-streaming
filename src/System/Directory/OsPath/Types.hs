@@ -14,6 +14,7 @@ module System.Directory.OsPath.Types
   ( SymlinkType(..)
   , FileType(..)
   , Basename(..)
+  , Relative(..)
   ) where
 
 import Control.DeepSeq (NFData)
@@ -36,3 +37,6 @@ instance NFData FileType
 newtype Basename a = Basename { unBasename :: a }
   deriving (Eq, Ord, Show, Generic, Generic1, NFData, Functor, Foldable, Traversable)
 
+-- | Filename relative to some other path.
+newtype Relative a = Relative { unRelative :: a }
+  deriving (Eq, Ord, Show, Generic, Generic1, NFData, Functor, Foldable, Traversable)

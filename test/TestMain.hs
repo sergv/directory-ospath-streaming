@@ -44,12 +44,18 @@ tests = testGroup "Tests"
         Just z <- readDirStream ds
         return $ L.sort [w, x, y, z]
       res @?= [([osp|bar.txt|], File Regular), ([osp|baz.txt|], File Regular), ([osp|bin|], Directory Regular), ([osp|foo.txt|], File Regular)]
+
   , testGroup "getFileType general"
       [ testCase "file" $ do
           getFileType [osp|directory-ospath-streaming.cabal|] >>= (@?= File Regular)
       , testCase "directory" $ do
           getFileType [osp|test|] >>= (@?= Directory Regular)
       ]
+
+  , testCase "getDirectoryContentsRecursive" $ do
+    res <- L.sort <$> getDirectoryContentsRecursive [osp|test/filesystem|]
+    res @?= [([osp|bar.txt|], File Regular), ([osp|baz.txt|], File Regular), ([osp|bin|], Directory Regular), ([osp|bin/bin.txt|], File Regular), ([osp|foo.txt|], File Regular)]
+
 #ifndef mingw32_HOST_OS
   , withResource
       (do

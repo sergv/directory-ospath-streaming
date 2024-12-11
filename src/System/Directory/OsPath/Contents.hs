@@ -15,6 +15,7 @@ module System.Directory.OsPath.Contents
   ) where
 
 import Control.Exception (mask, onException)
+import Data.Coerce (coerce)
 import System.IO.Unsafe (unsafeInterleaveIO)
 import System.OsPath
 
@@ -36,8 +37,8 @@ getDirectoryContentsRecursive
 getDirectoryContentsRecursive root =
   listContentsRecFold
     Nothing
-    (\absPath _ ft cons prependSubdir rest -> cons (absPath, ft) $ prependSubdir rest)
-    (\absPath _ ft -> pure (Just (absPath, ft)))
+    (\_ (Relative path) _ ft cons prependSubdir rest -> cons (path, ft) $ prependSubdir rest)
+    (\_ (Relative path) _ ft -> pure (Just (path, ft)))
     (Just root)
 
 {-# INLINE listContentsRecFold #-}
@@ -53,7 +54,7 @@ listContentsRecFold
   :: forall f a. Foldable f
   => Maybe Int
   -- ^ Depth limit if specified, negative values treated the same as positive ones.
-  -> (forall b. OsPath -> Basename OsPath -> FileType -> (a -> IO b -> IO b) -> (IO b -> IO b) -> IO b -> IO b)
+  -> (forall b. OsPath -> Relative OsPath -> Basename OsPath -> FileType -> (a -> IO b -> IO b) -> (IO b -> IO b) -> IO b -> IO b)
   -- ^ Prepare to fold directory given its path.
   --
   -- Can do IO actions to plan what to do and typically should derive its
@@ -67,7 +68,7 @@ listContentsRecFold
   -- be applied in the returned function and it will prepend results for subdirectories
   -- of the directory being analyzed. If not applied thes subdirectories will be skipped,
   -- this way ignoring particular directory and all its children can be achieved.
-  -> (OsPath -> Basename OsPath -> FileType -> IO (Maybe a))
+  -> (OsPath -> Relative OsPath -> Basename OsPath -> FileType -> IO (Maybe a))
   -- ^ What to do with file
   -> f OsPath
   -- ^ Roots to search in, either absolute or relative
@@ -83,7 +84,7 @@ listContentsRecFold depthLimit foldDir filePred input =
           Just x  -> abs x
 
         goNewDir :: Int -> OsPath -> IO [a] -> IO [a]
-        goNewDir !d dir rest = do
+        goNewDir !d dir rest =
           mask $ \restore -> do
             stream <- Streaming.openDirStream dir
             (restore
@@ -97,20 +98,46 @@ listContentsRecFold depthLimit foldDir filePred input =
             go = (`onException` Streaming.closeDirStream stream) $ do
               x <- Streaming.readDirStreamWithCache cache stream
               case x of
-                Nothing          -> rest
-                Just (y', y, ft) -> do
+                Nothing                -> rest
+                Just (yAbs, yBase, ft) -> do
+                  let yRel :: Relative OsPath
+                      yRel = coerce yBase
                   case ft of
-                    Other       -> addLazy (filePred y' y ft) go
-                    File _      -> addLazy (filePred y' y ft) go
-                    Directory _ -> foldDir y' y ft cons (goNewDir (depth - 1) y') go
+                    Other       -> addLazy (filePred yAbs yRel yBase ft) go
+                    File _      -> addLazy (filePred yAbs yRel yBase ft) go
+                    Directory _ -> foldDir yAbs yRel yBase ft cons (goNewDir1 yRel (depth - 1) yAbs) go
 
-            addLazy :: IO (Maybe a) -> IO [a] -> IO [a]
-            addLazy x y = do
-              x' <- x
-              case x' of
-                Nothing  -> y
-                Just x'' -> cons x'' y
+        goNewDir1 :: Relative OsPath -> Int -> OsPath -> IO [a] -> IO [a]
+        goNewDir1 root !d dir rest =
+          mask $ \restore -> do
+            stream <- Streaming.openDirStream dir
+            (restore
+              (goDirStream1 root d (Streaming.closeDirStream stream *> rest) stream))
 
-            cons :: a -> IO [a] -> IO [a]
-            cons x y =
-              (x :) <$> unsafeInterleaveIO y
+        goDirStream1 :: Relative OsPath -> Int -> IO [a] -> DirStream -> IO [a]
+        goDirStream1 _    0     rest _      = rest
+        goDirStream1 root depth rest stream = go
+          where
+            go :: IO [a]
+            go = (`onException` Streaming.closeDirStream stream) $ do
+              x <- Streaming.readDirStreamWithCache cache stream
+              case x of
+                Nothing                -> rest
+                Just (yAbs, yBase, ft) -> do
+                  let yRel :: Relative OsPath
+                      yRel = coerce (</>) root yBase
+                  case ft of
+                    Other       -> addLazy (filePred yAbs yRel yBase ft) go
+                    File _      -> addLazy (filePred yAbs yRel yBase ft) go
+                    Directory _ -> foldDir yAbs yRel yBase ft cons (goNewDir1 yRel (depth - 1) yAbs) go
+
+        addLazy :: IO (Maybe a) -> IO [a] -> IO [a]
+        addLazy x y = do
+          x' <- x
+          case x' of
+            Nothing  -> y
+            Just x'' -> cons x'' y
+
+        cons :: a -> IO [a] -> IO [a]
+        cons x y =
+          (x :) <$> unsafeInterleaveIO y
