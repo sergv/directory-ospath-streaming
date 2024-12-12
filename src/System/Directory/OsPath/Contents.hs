@@ -38,7 +38,7 @@ getDirectoryContentsRecursive
 getDirectoryContentsRecursive root =
   listContentsRecFold
     Nothing
-    (\_ _ (Relative path) _ ft cons prependSubdir rest -> cons (path, ft) $ prependSubdir rest)
+    (\_ _ (Relative path) _ ft _ cons prependSubdir rest -> cons (path, ft) $ prependSubdir rest)
     (\_ _ (Relative path) _ ft -> pure (Just (path, ft)))
     (Just root)
 
@@ -55,7 +55,7 @@ listContentsRecFold
   :: forall f a b. (Foldable f, Coercible b OsPath)
   => Maybe Int
   -- ^ Depth limit if specified, negative values treated the same as positive ones.
-  -> (forall c. OsPath -> b -> Relative OsPath -> Basename OsPath -> FileType -> (a -> IO c -> IO c) -> (IO c -> IO c) -> IO c -> IO c)
+  -> (forall c. OsPath -> b -> Relative OsPath -> Basename OsPath -> FileType -> SymlinkType -> (a -> IO c -> IO c) -> (IO c -> IO c) -> IO c -> IO c)
   -- ^ Prepare to fold directory given its path.
   --
   -- Can do IO actions to plan what to do and typically should derive its
@@ -67,7 +67,8 @@ listContentsRecFold
   -- - @b@                   - root of the visited directory as passed originally in @f b@ to the bigger fold function
   -- - @Relative OsPath@     - path to the visited directory relative to the previous @b@ argument
   -- - @Basename OsPath@     - name of the visited directory without slashes
-  -- - @FileType@            - expected to be directory, intended for checking symlink status of the visited directory
+  -- - @FileType@            - expected to be directory for now
+  -- - @SymlinkType@         - symlink status of the visited directory
   -- - @(a -> IO c -> IO c)@ - can be used to record some output (@a@) about the directory itself
   -- - @(IO c -> IO c)@      - traverse inside this directory, can be ignored to skip its children
   -- - @IO c@                - continue scanning not yet visited parts, must be used to construct return value (otherwise it won’t typecheck!)
@@ -114,9 +115,9 @@ listContentsRecFold depthLimit foldDir filePred input =
                   let yRel :: Relative OsPath
                       yRel = coerce yBase
                   case ft of
-                    Other       -> addLazy (filePred yAbs root yRel yBase ft) go
-                    File _      -> addLazy (filePred yAbs root yRel yBase ft) go
-                    Directory _ -> foldDir yAbs root yRel yBase ft cons (goNewDirAcc yRel (depth - 1) yAbs) go
+                    Other         -> addLazy (filePred yAbs root yRel yBase ft) go
+                    File _        -> addLazy (filePred yAbs root yRel yBase ft) go
+                    Directory ft' -> foldDir yAbs root yRel yBase ft ft' cons (goNewDirAcc yRel (depth - 1) yAbs) go
 
             goNewDirAcc :: Relative OsPath -> Int -> OsPath -> IO [a] -> IO [a]
             goNewDirAcc rootAcc !d dir rest1 =
@@ -138,9 +139,9 @@ listContentsRecFold depthLimit foldDir filePred input =
                       let yRel :: Relative OsPath
                           yRel = coerce (</>) rootAcc yBase
                       case ft of
-                        Other       -> addLazy (filePred yAbs root yRel yBase ft) go1
-                        File _      -> addLazy (filePred yAbs root yRel yBase ft) go1
-                        Directory _ -> foldDir yAbs root yRel yBase ft cons (goNewDirAcc yRel (depth1 - 1) yAbs) go1
+                        Other         -> addLazy (filePred yAbs root yRel yBase ft) go1
+                        File _        -> addLazy (filePred yAbs root yRel yBase ft) go1
+                        Directory ft' -> foldDir yAbs root yRel yBase ft ft' cons (goNewDirAcc yRel (depth1 - 1) yAbs) go1
 
         addLazy :: IO (Maybe a) -> IO [a] -> IO [a]
         addLazy x y = do
