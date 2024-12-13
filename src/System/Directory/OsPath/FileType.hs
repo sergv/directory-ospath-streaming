@@ -12,8 +12,10 @@ module System.Directory.OsPath.FileType
 
   , regularFile
   , regularDirectory
+  , regularOther
   , symlinkFile
   , symlinkDirectory
+  , symlinkOther
   ) where
 
 import System.OsPath.Types (OsPath)
@@ -36,7 +38,7 @@ getFileType fp = do
   then pure regularFile
   else do
     isDir <- doesDirectoryExist fp
-    pure $ if isDir then regularDirectory else Other
+    pure $ if isDir then regularDirectory else regularOther
 #endif
 #ifndef mingw32_HOST_OS
 getFileType fp = do
@@ -47,12 +49,12 @@ getFileType fp = do
       | PosixF.isSymbolicLink s -> do
         es' <- try $ PosixF.getFileStatus $ getOsString fp
         case es' of
-          Left (_ :: IOException) -> pure Other
+          Left (_ :: IOException) -> pure symlinkOther
           Right s'
             | PosixF.isRegularFile s' -> pure symlinkFile
             | PosixF.isDirectory s'   -> pure symlinkDirectory
-            | otherwise               -> pure Other
-      | otherwise -> pure Other
+            | otherwise               -> pure symlinkOther
+      | otherwise -> pure regularOther
 #endif
 
 -- Avoid allocations with this one weird trick.
@@ -62,8 +64,10 @@ getFileType fp = do
 {-# NOINLINE symlinkDirectory #-}
 -- | Auxiliary constants to refer to different file types without
 -- allocations.
-regularFile, regularDirectory, symlinkFile, symlinkDirectory :: FileType
+regularFile, regularDirectory, regularOther, symlinkFile, symlinkDirectory, symlinkOther :: FileType
 regularFile      = File Regular
 regularDirectory = Directory Regular
+regularOther     = Other Regular
 symlinkFile      = File Symlink
 symlinkDirectory = Directory Symlink
+symlinkOther     = Other Symlink

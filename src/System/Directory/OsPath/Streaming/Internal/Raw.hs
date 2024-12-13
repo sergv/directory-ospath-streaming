@@ -231,14 +231,14 @@ readRawDirStreamWithCache (DirReadCache barr#) (RawDirStream stream root) = go
 
             typ' <- case typ of
               DirInternals.UnknownType         -> getFileType fullPath
-              DirInternals.NamedPipeType       -> pure Other
-              DirInternals.CharacterDeviceType -> pure Other
+              DirInternals.NamedPipeType       -> pure regularOther
+              DirInternals.CharacterDeviceType -> pure regularOther
               DirInternals.DirectoryType       -> pure regularDirectory
-              DirInternals.BlockDeviceType     -> pure Other
+              DirInternals.BlockDeviceType     -> pure regularOther
               DirInternals.RegularFileType     -> pure regularFile
               DirInternals.SymbolicLinkType    -> getFileType fullPath
-              DirInternals.SocketType          -> pure Other
-              DirInternals.WhiteoutType        -> pure Other
+              DirInternals.SocketType          -> pure regularOther
+              DirInternals.WhiteoutType        -> pure regularOther
               -- Unaccounted type, probably should not happeen since the
               -- list above is exhaustive.
               _                                -> getFileType fullPath

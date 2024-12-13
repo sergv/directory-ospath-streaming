@@ -90,7 +90,7 @@ tests = testGroup "Tests"
               Left _  -> pure ()
               Right _ -> do
                 ft <- getFileType dest
-                ft @?= Other
+                ft @?= Other Regular
         , testCase "recursive symlink is other" $ do
             tmp <- mkTmpDir
             let dest = tmp </> [osp|tmp4|]
@@ -98,7 +98,7 @@ tests = testGroup "Tests"
               (getOsString dest)
               (getOsString dest)
             ft <- getFileType dest
-            ft @?= Other
+            ft @?= Other Symlink
         , testCase "dangling symlink is other" $ do
             tmp <- mkTmpDir
             let dest = tmp </> [osp|tmp5|]
@@ -106,7 +106,7 @@ tests = testGroup "Tests"
               (getOsString (tmp </> [osp|does-not-exist|]))
               (getOsString dest)
             ft <- getFileType dest
-            ft @?= Other
+            ft @?= Other Symlink
         ]
 #endif
   ]

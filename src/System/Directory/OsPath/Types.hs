@@ -28,7 +28,7 @@ instance NFData SymlinkType
 data FileType
   = File {-# UNPACK #-} !SymlinkType
   | Directory {-# UNPACK #-} !SymlinkType
-  | Other
+  | Other {-# UNPACK #-} !SymlinkType
   deriving (Show, Read, Eq, Ord, Generic)
 
 instance NFData FileType

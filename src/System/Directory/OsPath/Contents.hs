@@ -36,7 +36,7 @@ getDirectoryContentsRecursive
   :: OsPath
   -> IO [(OsPath, FileType)]
 getDirectoryContentsRecursive root =
-  listContentsRecFold
+  listContentsRecFold'
     Nothing
     (\_ _ (Relative path) _ ft _ cons prependSubdir rest -> cons (path, ft) $ prependSubdir rest)
     (\_ _ (Relative path) _ ft -> pure (Just (path, ft)))
@@ -55,7 +55,7 @@ listContentsRecFold
   :: forall f a b. (Foldable f, Coercible b OsPath)
   => Maybe Int
   -- ^ Depth limit if specified, negative values treated the same as positive ones.
-  -> (forall c. OsPath -> b -> Relative OsPath -> Basename OsPath -> FileType -> SymlinkType -> (a -> IO c -> IO c) -> (IO c -> IO c) -> IO c -> IO c)
+  -> (forall c. OsPath -> b -> Relative OsPath -> Basename OsPath -> SymlinkType -> (a -> IO c -> IO c) -> (IO c -> IO c) -> IO c -> IO c)
   -- ^ Prepare to fold directory given its path.
   --
   -- Can do IO actions to plan what to do and typically should derive its
@@ -67,7 +67,6 @@ listContentsRecFold
   -- - @b@                   - root of the visited directory as passed originally in @f b@ to the bigger fold function
   -- - @Relative OsPath@     - path to the visited directory relative to the previous @b@ argument
   -- - @Basename OsPath@     - name of the visited directory without slashes
-  -- - @FileType@            - expected to be directory for now
   -- - @SymlinkType@         - symlink status of the visited directory
   -- - @(a -> IO c -> IO c)@ - can be used to record some output (@a@) about the directory itself
   -- - @(IO c -> IO c)@      - traverse inside this directory, can be ignored to skip its children
@@ -85,10 +84,24 @@ listContentsRecFold
   -> f b
   -- ^ Roots to search in, either absolute or relative
   -> IO [a]
-listContentsRecFold depthLimit foldDir filePred input =
-  listContentsRecFold' =<< Raw.allocateDirReadCache
+listContentsRecFold = \depthLimit foldDir filePred input ->
+  listContentsRecFold' depthLimit (\a b c d _f g h i j -> foldDir a b c d g h i j) filePred input
+
+{-# INLINE listContentsRecFold' #-}
+-- Actual worker with slightly worse type signature that we don’t want to expose to the users.
+-- But it’s better candidate for implementing getDirectoryContentsRecursive here that
+-- listContentsRecFold.
+listContentsRecFold'
+  :: forall f a b. (Foldable f, Coercible b OsPath)
+  => Maybe Int
+  -> (forall c. OsPath -> b -> Relative OsPath -> Basename OsPath -> FileType -> SymlinkType -> (a -> IO c -> IO c) -> (IO c -> IO c) -> IO c -> IO c)
+  -> (OsPath -> b -> Relative OsPath -> Basename OsPath -> FileType -> IO (Maybe a))
+  -> f b
+  -> IO [a]
+listContentsRecFold' depthLimit foldDir filePred input =
+  goCache =<< Raw.allocateDirReadCache
   where
-    listContentsRecFold' cache =
+    goCache cache =
       foldr (goNewDir initLimit) (Raw.releaseDirReadCache cache *> pure []) input
       where
         !initLimit = case depthLimit of
@@ -115,7 +128,7 @@ listContentsRecFold depthLimit foldDir filePred input =
                   let yRel :: Relative OsPath
                       yRel = coerce yBase
                   case ft of
-                    Other         -> addLazy (filePred yAbs root yRel yBase ft) go
+                    Other _       -> addLazy (filePred yAbs root yRel yBase ft) go
                     File _        -> addLazy (filePred yAbs root yRel yBase ft) go
                     Directory ft' -> foldDir yAbs root yRel yBase ft ft' cons (goNewDirAcc yRel (depth - 1) yAbs) go
 
@@ -139,7 +152,7 @@ listContentsRecFold depthLimit foldDir filePred input =
                       let yRel :: Relative OsPath
                           yRel = coerce (</>) rootAcc yBase
                       case ft of
-                        Other         -> addLazy (filePred yAbs root yRel yBase ft) go1
+                        Other _       -> addLazy (filePred yAbs root yRel yBase ft) go1
                         File _        -> addLazy (filePred yAbs root yRel yBase ft) go1
                         Directory ft' -> foldDir yAbs root yRel yBase ft ft' cons (goNewDirAcc yRel (depth1 - 1) yAbs) go1
 
