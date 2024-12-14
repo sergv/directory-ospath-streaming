@@ -5,6 +5,7 @@
 -- Maintainer: serg.foo@gmail.com
 
 {-# LANGUAGE BangPatterns        #-}
+{-# LANGUAGE FlexibleContexts    #-}
 {-# LANGUAGE RankNTypes          #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
