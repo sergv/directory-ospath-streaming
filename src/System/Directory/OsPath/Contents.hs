@@ -78,7 +78,7 @@ listContentsRecFold
   --
   -- The passed @(IO c -> IO c)@ argument function should (but is not required to)
   -- be applied in the returned function and it will prepend results for subdirectories
-  -- of the directory being analyzed. If not applied thes subdirectories will be skipped,
+  -- of the directory being analyzed. If not applied these subdirectories will be skipped,
   -- this way ignoring particular directory and all its children can be achieved.
   -> (OsPath -> b -> Relative OsPath -> Basename OsPath -> FileType -> IO (Maybe a))
   -- ^ What to do with file
