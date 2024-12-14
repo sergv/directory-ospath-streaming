@@ -54,7 +54,7 @@ tests = testGroup "Tests"
 
   , testCase "getDirectoryContentsRecursive" $ do
     res <- L.sort <$> getDirectoryContentsRecursive [osp|test/filesystem|]
-    res @?= [([osp|bar.txt|], File Regular), ([osp|baz.txt|], File Regular), ([osp|bin|], Directory Regular), ([osp|bin/bin.txt|], File Regular), ([osp|foo.txt|], File Regular)]
+    res @?= [([osp|bar.txt|], File Regular), ([osp|baz.txt|], File Regular), ([osp|bin|], Directory Regular), ([osp|bin|] </> [osp|bin.txt|], File Regular), ([osp|foo.txt|], File Regular)]
 
 #ifndef mingw32_HOST_OS
   , withResource
