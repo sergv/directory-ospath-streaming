@@ -1,6 +1,6 @@
 # 0.2
 
-– New function for listing directory contents recursively ‘getDirectoryContentsRecursive’
+- New function for listing directory contents recursively ‘getDirectoryContentsRecursive’
 - New function for defining custom recursive directory traversals ‘listContentsRecFold’
 - ‘readDirStream’ now returns file type in addition to basename
 - ‘DirStream’ is now safe to close multiple times and it will be automatically closed by GC when it becomes unreachable
