@@ -56,7 +56,7 @@ jobs:
         cd ..
         cabal get directory-ospath-streaming-*.tar.gz
 
-    - name: Build & Test default
+    - name: Build & Test
       run: |
         cd ../directory-ospath-streaming-*/
         cabal build all
@@ -71,3 +71,16 @@ jobs:
       run: |
         cd ../directory-ospath-streaming-*/
         cabal check
+
+    - name: Build & Test unix < 2.8.6
+      run: |
+        cd ../directory-ospath-streaming-*/
+        cabal build --constraint 'unix < 2.8.6' all
+        cabal test --constraint 'unix < 2.8.6' --test-show-details=direct all
+
+    - name: Build & Test unix >= 2.8.6
+      run: |
+        cd ../directory-ospath-streaming-*/
+        cabal build --constraint 'unix >= 2.8.6' all
+        cabal test --constraint 'unix >= 2.8.6' --test-show-details=direct all
+
