@@ -7,4 +7,6 @@ fashion without storing all directory elements in memory. From another
 perspective, this reading interface allows stopping at any point
 without loading every directory element.
 
+Also defines general-purpose recursive directory traversals.
+
 Both Windows and Unix systems are supported.

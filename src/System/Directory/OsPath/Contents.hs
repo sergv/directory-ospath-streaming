@@ -57,24 +57,24 @@ listContentsRecFold
   => Maybe Int
   -- ^ Depth limit if specified, negative values treated the same as positive ones.
   -> (forall c. OsPath -> b -> Relative OsPath -> Basename OsPath -> SymlinkType -> (a -> IO c -> IO c) -> (IO c -> IO c) -> IO c -> IO c)
-  -- ^ Prepare to fold directory given its path.
+  -- ^ Decide how to fold directory and its children given its path.
   --
   -- Can do IO actions to plan what to do and typically should derive its
-  -- result from last @IO c@ argument. Ignoring it will terminate content enumeration
-  -- and not produce any more results.
-  --
-  -- Arguments:
-  -- - @OsPath@              - absolute path to the visited directory
-  -- - @b@                   - root of the visited directory as passed originally in @f b@ to the bigger fold function
-  -- - @Relative OsPath@     - path to the visited directory relative to the previous @b@ argument
-  -- - @Basename OsPath@     - name of the visited directory without slashes
-  -- - @SymlinkType@         - symlink status of the visited directory
-  -- - @(a -> IO c -> IO c)@ - can be used to record some output (@a@) about the directory itself
-  -- - @(IO c -> IO c)@      - traverse inside this directory, can be ignored to skip its children
-  -- - @IO c@                - continue scanning not yet visited parts, must be used to construct return value (otherwise it won’t typecheck!)
+  -- result from last @IO c@ argument.
   --
   -- Returns @IO c@ where @c@ is hidden from the user so the only way
   -- to make it is to construct from the passed @IO c@ action.
+  --
+  -- Arguments:
+  --
+  -- * @OsPath@              - absolute path to the visited directory
+  -- * @b@                   - root of the visited directory as passed originally in @f b@ to the bigger fold function
+  -- * @Relative OsPath@     - path to the visited directory relative to the previous @b@ argument
+  -- * @Basename OsPath@     - name of the visited directory without slashes
+  -- * @SymlinkType@         - symlink status of the visited directory
+  -- * @(a -> IO c -> IO c)@ - can be used to record some output (@a@) about the directory itself
+  -- * @(IO c -> IO c)@      - traverse inside this directory, can be ignored to skip its children
+  -- * @IO c@                - continue scanning not yet visited parts, must be used to construct return value (otherwise it won’t typecheck!)
   --
   -- The passed @(IO c -> IO c)@ argument function should (but is not required to)
   -- be applied in the returned function and it will prepend results for subdirectories
