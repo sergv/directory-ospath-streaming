@@ -42,9 +42,9 @@ openDirStream :: OsPath -> IO DirStream
 openDirStream root = mdo
   dsHandle   <- Raw.openRawDirStream root
   dsIsClosed <- Counter.new 0
-  let result = DirStream{dsHandle, dsIsClosed, dsFin}
-  dsFin <- mkWeak result result (Just (closeDirStreamInternal result))
-  pure result
+  let stream = DirStream{dsHandle, dsIsClosed, dsFin}
+  dsFin <- mkWeak stream stream (Just (closeDirStreamInternal stream))
+  pure stream
 
 -- | Deallocate directory handle. It’s safe to close 'DirStream' multiple times,
 -- unlike the underlying OS-specific directory stream handle.
