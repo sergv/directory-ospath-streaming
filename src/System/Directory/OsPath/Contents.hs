@@ -15,7 +15,7 @@ module System.Directory.OsPath.Contents
   , listContentsRecFold
   ) where
 
-import Control.Exception (mask, onException)
+import Control.Exception (onException)
 import Data.Coerce (coerce, Coercible)
 import System.IO.Unsafe (unsafeInterleaveIO)
 import System.OsPath
@@ -110,11 +110,9 @@ listContentsRecFold' depthLimit foldDir filePred input =
           Just x  -> abs x
 
         goNewDir :: Int -> b -> IO [a] -> IO [a]
-        goNewDir !d root rest =
-          mask $ \restore -> do
-            stream <- Streaming.openDirStream $ coerce root
-            (restore
-              (goDirStream root d (Streaming.closeDirStream stream *> rest) stream))
+        goNewDir !d root rest = do
+          stream <- Streaming.openDirStream $ coerce root
+          goDirStream root d (Streaming.closeDirStream stream *> rest) stream
 
         goDirStream :: b -> Int -> IO [a] -> DirStream -> IO [a]
         goDirStream _    0     rest _      = rest
@@ -134,11 +132,9 @@ listContentsRecFold' depthLimit foldDir filePred input =
                     Directory ft' -> foldDir yAbs root yRel yBase ft ft' cons (goNewDirAcc yRel (depth - 1) yAbs) go
 
             goNewDirAcc :: Relative OsPath -> Int -> OsPath -> IO [a] -> IO [a]
-            goNewDirAcc rootAcc !d dir rest1 =
-              mask $ \restore -> do
-                stream1 <- Streaming.openDirStream dir
-                (restore
-                  (goDirStreamAcc rootAcc d (Streaming.closeDirStream stream1 *> rest1) stream1))
+            goNewDirAcc rootAcc !d dir rest1 = do
+              stream1 <- Streaming.openDirStream dir
+              goDirStreamAcc rootAcc d (Streaming.closeDirStream stream1 *> rest1) stream1
 
             goDirStreamAcc :: Relative OsPath -> Int -> IO [a] -> DirStream -> IO [a]
             goDirStreamAcc _       0      rest1 _       = rest1
