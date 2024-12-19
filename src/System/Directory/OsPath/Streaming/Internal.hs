@@ -27,6 +27,7 @@ import System.OsPath (OsPath)
 
 import qualified System.Directory.OsPath.Streaming.Internal.Raw as Raw
 import System.Directory.OsPath.Types
+import System.Directory.OsPath.Utils (touch)
 
 -- | Abstract handle to directory contents.
 --
@@ -49,10 +50,11 @@ openDirStream root = mdo
 -- | Deallocate directory handle. It’s safe to close 'DirStream' multiple times,
 -- unlike the underlying OS-specific directory stream handle.
 closeDirStream :: DirStream -> IO ()
-closeDirStream stream =
+closeDirStream stream = do
   -- Finalize ourselves to do it only once instead of running finalizer
   -- in GC afterwards once more.
   finalize (dsFin stream)
+  touch stream
 
 closeDirStreamInternal :: DirStream -> IO ()
 closeDirStreamInternal DirStream{dsHandle, dsIsClosed} = do
