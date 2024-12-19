@@ -118,6 +118,7 @@ library
   other-modules:
     System.Directory.OsPath.Contents
     System.Directory.OsPath.FileType
+    System.Directory.OsPath.Utils
   hs-source-dirs:
     src
   build-depends:

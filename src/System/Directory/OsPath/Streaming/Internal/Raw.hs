@@ -65,10 +65,12 @@ import Foreign.Storable (sizeOf, alignment, peekElemOff)
 import qualified System.Posix.Directory.Internals as DirInternals
 import System.Posix.PosixPath.FilePath (peekFilePath)
 
-import GHC.Exts (MutableByteArray#, newAlignedPinnedByteArray#, touch#, mutableByteArrayContents#, RealWorld)
+import GHC.Exts (MutableByteArray#, newAlignedPinnedByteArray#, mutableByteArrayContents#, RealWorld)
 import GHC.IO (IO(..))
 import GHC.Int (Int(..))
 import GHC.Ptr (Ptr(..))
+
+import System.Directory.OsPath.Utils (touch)
 # endif
 #endif
 
@@ -167,8 +169,7 @@ releaseDirReadCache _ = pure ()
 releaseDirReadCache _ = pure ()
 # endif
 # ifdef HAVE_UNIX_CACHE
-releaseDirReadCache (DirReadCache barr#) =
-  IO $ \s0 -> case touch# barr# s0 of s1 -> (# s1, () #)
+releaseDirReadCache = touch
 # endif
 #endif
 
