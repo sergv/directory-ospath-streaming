@@ -52,9 +52,23 @@ tests = testGroup "Tests"
           getFileType [osp|test|] >>= (@?= Directory Regular)
       ]
 
-  , testCase "getDirectoryContentsRecursive" $ do
-    res <- L.sort <$> getDirectoryContentsRecursive [osp|test/filesystem|]
-    res @?= [([osp|bar.txt|], File Regular), ([osp|baz.txt|], File Regular), ([osp|bin|], Directory Regular), ([osp|bin|] </> [osp|bin.txt|], File Regular), ([osp|foo.txt|], File Regular)]
+  , testGroup "contents"
+      [ testCase "getDirectoryContentsRecursive" $ do
+          res <- L.sort <$> getDirectoryContentsRecursive [osp|test/filesystem|]
+          res @?= [([osp|bar.txt|], File Regular), ([osp|baz.txt|], File Regular), ([osp|bin|], Directory Regular), ([osp|bin|] </> [osp|bin.txt|], File Regular), ([osp|foo.txt|], File Regular)]
+
+      , testCase "getDirectoryContentsWithFilterRecursive 1" $ do
+          res <- L.sort <$> getDirectoryContentsWithFilterRecursive (\_ _ -> True) (const True) [osp|test/filesystem|]
+          res @?= [([osp|bar.txt|], File Regular), ([osp|baz.txt|], File Regular), ([osp|bin|], Directory Regular), ([osp|bin|] </> [osp|bin.txt|], File Regular), ([osp|foo.txt|], File Regular)]
+
+      , testCase "getDirectoryContentsWithFilterRecursive 2" $ do
+          res <- L.sort <$> getDirectoryContentsWithFilterRecursive (\x _ -> x /= Basename [osp|bin|]) (const True) [osp|test/filesystem|]
+          res @?= [([osp|bar.txt|], File Regular), ([osp|baz.txt|], File Regular), ([osp|bin|], Directory Regular), ([osp|foo.txt|], File Regular)]
+
+      , testCase "getDirectoryContentsWithFilterRecursive 3" $ do
+          res <- L.sort <$> getDirectoryContentsWithFilterRecursive (\_ _ -> True) (`elem` [Basename [osp|foo.txt|], Basename [osp|bin|], Basename [osp|bin.txt|]]) [osp|test/filesystem|]
+          res @?= [([osp|bin|], Directory Regular), ([osp|bin|] </> [osp|bin.txt|], File Regular), ([osp|foo.txt|], File Regular)]
+      ]
 
 #ifndef mingw32_HOST_OS
   , withResource
@@ -62,7 +76,7 @@ tests = testGroup "Tests"
         tmp <- getTemporaryDirectory >>= canonicalizePath
         createFreshTempDir tmp [osp|test|])
       removeDirectoryRecursive
-      $ \mkTmpDir -> testGroup "getFileType unix"
+    $ \mkTmpDir -> testGroup "getFileType unix"
         [ testCase "file symlink" $ do
             tmp     <- mkTmpDir
             currDir <- getCurrentDirectory

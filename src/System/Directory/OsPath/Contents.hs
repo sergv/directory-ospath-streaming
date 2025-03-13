@@ -11,6 +11,7 @@
 
 module System.Directory.OsPath.Contents
   ( getDirectoryContentsRecursive
+  , getDirectoryContentsWithFilterRecursive
 
   , listContentsRecFold
   ) where
@@ -41,6 +42,41 @@ getDirectoryContentsRecursive root =
     Nothing
     (\_ _ (Relative path) _ ft _ cons prependSubdir rest -> cons (path, ft) $ prependSubdir rest)
     (\_ _ (Relative path) _ ft -> pure (Just (path, ft)))
+    (Just root)
+
+-- | Recursively list all the files and directories that satisfy given
+-- predicate in a directory and all subdirectories. Descending into
+-- some subdirectories may be avoided by filtering them out with a
+-- visiting predicate.
+--
+-- Not visited directory entry may still be reported depending on the
+-- collection predicate.
+--
+-- The directory structure is traversed depth-first.
+--
+-- The result is generated lazily so is not well defined if the source
+-- directory structure changes before the list is fully consumed.
+--
+-- Symlinks within directory structure may cause result to be infinitely long, but
+-- they can be filtered out with a suitable directory visiting predicate.
+getDirectoryContentsWithFilterRecursive
+  :: (Basename OsPath -> SymlinkType -> Bool) -- ^ Whether to visit a directory
+  -> (Basename OsPath ->                Bool) -- ^ Whether to collect given directory element, either file or directory.
+  -> OsPath
+  -> IO [(OsPath, FileType)]
+getDirectoryContentsWithFilterRecursive visitPred collectPred root =
+  listContentsRecFold'
+    Nothing
+    (\_ _ (Relative path) basename ft symlink cons prependSubdir rest ->
+       (if collectPred basename then cons (path, ft) else id) $
+         if visitPred basename symlink
+         then prependSubdir rest
+         else rest)
+    (\_ _ (Relative path) basename ft ->
+      pure $
+        if collectPred basename
+        then Just (path, ft)
+        else Nothing)
     (Just root)
 
 {-# INLINE listContentsRecFold #-}

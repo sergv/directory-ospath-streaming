@@ -1,3 +1,7 @@
+# 0.2.2
+
+- Add `getDirectoryContentsWithFilterRecursive` for recursively listing directory contents with commonly needed filtering
+
 # 0.2.1
 
 - Fix `listContentsRecFold` to not mask exceptions unnecessarily which could cause hangups. The `getDirectoryContentsRecursive` gets the fix as well

@@ -23,6 +23,7 @@ module System.Directory.OsPath.Streaming
 
   -- * Get directory contents
   , getDirectoryContentsRecursive
+  , getDirectoryContentsWithFilterRecursive
 
   , listContentsRecFold
 
