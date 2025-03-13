@@ -90,7 +90,7 @@ listContentsRecFold = \depthLimit foldDir filePred input ->
 
 {-# INLINE listContentsRecFold' #-}
 -- Actual worker with slightly worse type signature that we don’t want to expose to the users.
--- But it’s better candidate for implementing getDirectoryContentsRecursive here that
+-- But it’s better candidate for implementing getDirectoryContentsRecursive here than
 -- listContentsRecFold.
 listContentsRecFold'
   :: forall f a b. (Foldable f, Coercible b OsPath)
