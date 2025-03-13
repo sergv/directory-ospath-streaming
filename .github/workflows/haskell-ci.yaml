@@ -24,11 +24,12 @@ jobs:
           - "9.6"
           - "9.8"
           - "9.10"
+          - "9.12"
         include:
         - os: macOS-latest
-          ghc: "9.10"
+          ghc: "9.12"
         - os: windows-latest
-          ghc: "9.10"
+          ghc: "9.12"
     steps:
     - uses: actions/checkout@v4
 
@@ -73,6 +74,7 @@ jobs:
         cabal check
 
     - name: Build & Test unix < 2.8.6
+      if: matrix.ghc == '8.6' || matrix.ghc == '8.8'  || matrix.ghc == '8.10' || matrix.ghc == '8.10' || matrix.ghc == '9.2' || matrix.ghc == '9.4' || matrix.ghc == '9.6' || matrix.ghc == '9.8' || matrix.ghc == '9.10'
       run: |
         cd ../directory-ospath-streaming-*/
         cabal build --constraint 'unix < 2.8.6' all
