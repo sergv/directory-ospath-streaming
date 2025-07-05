@@ -157,3 +157,16 @@ test-suite test
   ghc-options:
     -rtsopts
     -main-is TestMain
+
+benchmark bench
+  type:
+    exitcode-stdio-1.0
+  main-is:
+    bench/BenchMain.hs
+  build-depends:
+    , base >= 4.12
+    , directory
+    , directory-ospath-streaming
+    , tasty-bench
+  ghc-options:
+    -main-is BenchMain
