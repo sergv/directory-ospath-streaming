@@ -14,10 +14,12 @@
 module TestMain (main) where
 
 import Control.Exception
+import Data.Functor.Identity (Identity(..))
 import qualified Data.List as L
 import System.OsPath
 
 import System.Directory.OsPath.Streaming
+import System.Directory.OsPath.Types
 
 import Test.Tasty
 import Test.Tasty.HUnit
@@ -80,6 +82,22 @@ tests = testGroup "Tests"
       , testCase "getDirectoryContentsWithFilterRecursive 3" $ do
           res <- L.sort <$> getDirectoryContentsWithFilterRecursive (\_ _ -> True) (`elem` [Basename [osp|foo.txt|], Basename [osp|bin|], Basename [osp|bin.txt|]]) [osp|test/filesystem|]
           res @?= [([osp|bin|], Directory Regular), ([osp|bin|] </> [osp|bin.txt|], File Regular), ([osp|foo.txt|], File Regular)]
+
+      , testCase "listContentsRecFold" $ do
+          let dir = [osp|test/filesystem|]
+          res <- fmap L.sort $
+            listContentsRecFold
+              Nothing
+              (\a b c d e cons rec rest -> cons (a, b, c, d, Directory e) $ rec rest)
+              (\a b c d e -> pure $ Just (a, b, c, d, e))
+              (Identity dir)
+          res @?=
+            [ (dir </> [osp|bar.txt|],                dir, Relative [osp|bar.txt|],                  Basename [osp|bar.txt|], File Regular)
+            , (dir </> [osp|baz.txt|],                dir, Relative [osp|baz.txt|],                  Basename [osp|baz.txt|], File Regular)
+            , (dir </> [osp|bin|],                    dir, Relative [osp|bin|],                      Basename [osp|bin|],     Directory Regular)
+            , (dir </> [osp|bin|] </> [osp|bin.txt|], dir, Relative $ [osp|bin|] </> [osp|bin.txt|], Basename [osp|bin.txt|], File Regular)
+            , (dir </> [osp|foo.txt|],                dir, Relative [osp|foo.txt|],                  Basename [osp|foo.txt|], File Regular)
+            ]
       ]
 
 #ifndef mingw32_HOST_OS

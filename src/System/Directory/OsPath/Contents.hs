@@ -102,7 +102,7 @@ listContentsRecFold
   --
   -- Arguments:
   --
-  -- * @OsPath@              - absolute path to the visited directory
+  -- * @OsPath@              - full path to the visited directory relative to root we’re searching in. If the root was absolute then this path would be too, if it was relative then this path would be relative to the same target.
   -- * @b@                   - root of the visited directory as passed originally in @f b@ to the bigger fold function
   -- * @Relative OsPath@     - path to the visited directory relative to the previous @b@ argument
   -- * @Basename OsPath@     - name of the visited directory without slashes
