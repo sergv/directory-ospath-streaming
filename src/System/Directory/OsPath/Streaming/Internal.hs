@@ -44,7 +44,7 @@ openDirStream root = mdo
   dsHandle   <- Raw.openRawDirStream root
   dsIsClosed <- Counter.new 0
   let stream = DirStream{dsHandle, dsIsClosed, dsFin}
-  dsFin <- mkWeak stream stream (Just (closeDirStreamInternal stream))
+  dsFin      <- mkWeak stream stream (Just (closeDirStreamInternal stream))
   pure stream
 
 -- | Deallocate directory handle. It’s safe to close 'DirStream' multiple times,
