@@ -1,3 +1,8 @@
+# Not released
+
+- Remove `DirReadCache` since it was not doing anything most of the time. It was only used for the `readdir_r` libc function which is deprecated and is not typically used by default in the `unix` package (cf https://github.com/haskell/unix/pull/349)
+- Add new function `readDirStreamFull` that is like `readDirStream` but also returns full path to the directory entry to let clients reuse the full path from the stream root that would be created anyway
+
 # 0.2.2
 
 - Add `getDirectoryContentsWithFilterRecursive` for recursively listing directory contents with commonly needed filtering

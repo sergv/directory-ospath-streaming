@@ -14,9 +14,8 @@ module System.Directory.OsPath.Streaming.Internal
   ( DirStream(..)
   , openDirStream
   , readDirStream
+  , readDirStreamFull
   , closeDirStream
-
-  , readDirStreamWithCache
   ) where
 
 import Control.Concurrent.Counter (Counter)
@@ -62,12 +61,26 @@ closeDirStreamInternal DirStream{dsHandle, dsIsClosed} = do
   when (oldVal == 0) $
     Raw.closeRawDirStream dsHandle
 
+-- | Returns basename path of the directory entry.
 readDirStream :: DirStream -> IO (Maybe (OsPath, FileType))
-readDirStream = Raw.readRawDirStream . dsHandle
+readDirStream =
+  fmap (fmap (\(_full, Basename x, typ) -> (x, typ))) . readDirStreamFull
 
-readDirStreamWithCache
-  :: Raw.DirReadCache
-  -> DirStream
-  -> IO (Maybe (OsPath, Basename OsPath, FileType))
-readDirStreamWithCache cache =
-  Raw.readRawDirStreamWithCache cache . dsHandle
+-- | Returns both basename path and full path of a directory entry relative to the
+-- passed 'DirStream' root.
+--
+-- For example:
+--
+-- > readDirStreamFull =<< openDirStream [osp|.|]
+-- > Just ("./bar",Basename {unBasename = "foo"},File Regular)
+--
+-- > readDirStreamFull =<< openDirStream [osp|foo/|]
+-- > Just ("foo/bar",Basename {unBasename = "foo"},File Regular)
+--
+-- > readDirStreamFull =<< openDirStream [osp|/foo/foo|]
+-- > Just ("/foo/foo/bar",Basename {unBasename = "foo"},File Regular)
+--
+-- This allows to avoid re-creating the full path on the client side
+-- and thus reduce allocations.
+readDirStreamFull :: DirStream -> IO (Maybe (OsPath, Basename OsPath, FileType))
+readDirStreamFull = Raw.readRawDirStream . dsHandle

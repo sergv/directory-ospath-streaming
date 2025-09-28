@@ -23,7 +23,6 @@ import System.OsPath
 
 import System.Directory.OsPath.Streaming.Internal (DirStream)
 import qualified System.Directory.OsPath.Streaming.Internal as Streaming
-import qualified System.Directory.OsPath.Streaming.Internal.Raw as Raw
 import System.Directory.OsPath.Types
 
 -- | Recursively list all the files and directories in a directory and all subdirectories.
@@ -136,66 +135,63 @@ listContentsRecFold'
   -> f b
   -> IO [a]
 listContentsRecFold' depthLimit foldDir filePred input =
-  goCache =<< Raw.allocateDirReadCache
+  foldr (goNewDir initLimit) (pure []) input
   where
-    goCache cache =
-      foldr (goNewDir initLimit) (Raw.releaseDirReadCache cache *> pure []) input
+    !initLimit = case depthLimit of
+      Nothing -> -1 -- Loop until overflow, basically infinitely
+      Just x  -> abs x
+
+    goNewDir :: Int -> b -> IO [a] -> IO [a]
+    goNewDir !d root rest = do
+      stream <- Streaming.openDirStream $ coerce root
+      goToplevelDirStream root d (Streaming.closeDirStream stream *> rest) stream
+
+    goToplevelDirStream :: b -> Int -> IO [a] -> DirStream -> IO [a]
+    goToplevelDirStream _    0     rest _      = rest
+    goToplevelDirStream root depth rest stream = go
       where
-        !initLimit = case depthLimit of
-          Nothing -> -1 -- Loop until overflow, basically infinitely
-          Just x  -> abs x
+        go :: IO [a]
+        go = (`onException` Streaming.closeDirStream stream) $ do
+          x <- Streaming.readDirStreamFull stream
+          case x of
+            Nothing                -> rest
+            Just (yAbs, yBase, ft) -> do
+              let yRel :: Relative OsPath
+                  yRel = coerce yBase
+              case ft of
+                Other _       -> addLazy (filePred yAbs root yRel yBase ft) go
+                File _        -> addLazy (filePred yAbs root yRel yBase ft) go
+                Directory ft' -> foldDir yAbs root yRel yBase ft ft' cons (goChildDirAcc yRel (depth - 1) yAbs) go
 
-        goNewDir :: Int -> b -> IO [a] -> IO [a]
-        goNewDir !d root rest = do
-          stream <- Streaming.openDirStream $ coerce root
-          goDirStream root d (Streaming.closeDirStream stream *> rest) stream
+        goChildDirAcc :: Relative OsPath -> Int -> OsPath -> IO [a] -> IO [a]
+        goChildDirAcc rootAcc !d dir rest1 = do
+          stream1 <- Streaming.openDirStream dir
+          goChildDirStreamAcc rootAcc d (Streaming.closeDirStream stream1 *> rest1) stream1
 
-        goDirStream :: b -> Int -> IO [a] -> DirStream -> IO [a]
-        goDirStream _    0     rest _      = rest
-        goDirStream root depth rest stream = go
+        goChildDirStreamAcc :: Relative OsPath -> Int -> IO [a] -> DirStream -> IO [a]
+        goChildDirStreamAcc _       0      rest1 _       = rest1
+        goChildDirStreamAcc rootAcc depth1 rest1 stream1 = go1
           where
-            go :: IO [a]
-            go = (`onException` Streaming.closeDirStream stream) $ do
-              x <- Streaming.readDirStreamWithCache cache stream
+            go1 :: IO [a]
+            go1 = (`onException` Streaming.closeDirStream stream1) $ do
+              x <- Streaming.readDirStreamFull stream1
               case x of
-                Nothing                -> rest
+                Nothing                -> rest1
                 Just (yAbs, yBase, ft) -> do
                   let yRel :: Relative OsPath
-                      yRel = coerce yBase
+                      yRel = coerce (</>) rootAcc yBase
                   case ft of
-                    Other _       -> addLazy (filePred yAbs root yRel yBase ft) go
-                    File _        -> addLazy (filePred yAbs root yRel yBase ft) go
-                    Directory ft' -> foldDir yAbs root yRel yBase ft ft' cons (goNewDirAcc yRel (depth - 1) yAbs) go
+                    Other _       -> addLazy (filePred yAbs root yRel yBase ft) go1
+                    File _        -> addLazy (filePred yAbs root yRel yBase ft) go1
+                    Directory ft' -> foldDir yAbs root yRel yBase ft ft' cons (goChildDirAcc yRel (depth1 - 1) yAbs) go1
 
-            goNewDirAcc :: Relative OsPath -> Int -> OsPath -> IO [a] -> IO [a]
-            goNewDirAcc rootAcc !d dir rest1 = do
-              stream1 <- Streaming.openDirStream dir
-              goDirStreamAcc rootAcc d (Streaming.closeDirStream stream1 *> rest1) stream1
+    addLazy :: IO (Maybe a) -> IO [a] -> IO [a]
+    addLazy x y = do
+      x' <- x
+      case x' of
+        Nothing  -> y
+        Just x'' -> cons x'' y
 
-            goDirStreamAcc :: Relative OsPath -> Int -> IO [a] -> DirStream -> IO [a]
-            goDirStreamAcc _       0      rest1 _       = rest1
-            goDirStreamAcc rootAcc depth1 rest1 stream1 = go1
-              where
-                go1 :: IO [a]
-                go1 = (`onException` Streaming.closeDirStream stream1) $ do
-                  x <- Streaming.readDirStreamWithCache cache stream1
-                  case x of
-                    Nothing                -> rest1
-                    Just (yAbs, yBase, ft) -> do
-                      let yRel :: Relative OsPath
-                          yRel = coerce (</>) rootAcc yBase
-                      case ft of
-                        Other _       -> addLazy (filePred yAbs root yRel yBase ft) go1
-                        File _        -> addLazy (filePred yAbs root yRel yBase ft) go1
-                        Directory ft' -> foldDir yAbs root yRel yBase ft ft' cons (goNewDirAcc yRel (depth1 - 1) yAbs) go1
-
-        addLazy :: IO (Maybe a) -> IO [a] -> IO [a]
-        addLazy x y = do
-          x' <- x
-          case x' of
-            Nothing  -> y
-            Just x'' -> cons x'' y
-
-        cons :: a -> IO [a] -> IO [a]
-        cons x y =
-          (x :) <$> unsafeInterleaveIO y
+    cons :: a -> IO [a] -> IO [a]
+    cons x y =
+      (x :) <$> unsafeInterleaveIO y

@@ -13,6 +13,7 @@ module System.Directory.OsPath.Streaming
   ( DirStream
   , openDirStream
   , readDirStream
+  , readDirStreamFull
   , closeDirStream
 
   -- * File types

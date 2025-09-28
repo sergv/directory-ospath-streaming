@@ -45,6 +45,18 @@ tests = testGroup "Tests"
         return $ L.sort [w, x, y, z]
       res @?= [([osp|bar.txt|], File Regular), ([osp|baz.txt|], File Regular), ([osp|bin|], Directory Regular), ([osp|foo.txt|], File Regular)]
 
+  , testCase "readDirStreamFull" $ do
+      let dir = [osp|test/filesystem|]
+      res <- bracket (openDirStream dir) closeDirStream $ \ds -> do
+        Just w <- readDirStreamFull ds
+        Just x <- readDirStreamFull ds
+        Just y <- readDirStreamFull ds
+        Just z <- readDirStreamFull ds
+        return $ L.sort [w, x, y, z]
+      res @?= map
+        (\(x, y) -> (dir </> x, Basename x, y))
+        [([osp|bar.txt|], File Regular), ([osp|baz.txt|], File Regular), ([osp|bin|], Directory Regular), ([osp|foo.txt|], File Regular)]
+
   , testGroup "getFileType general"
       [ testCase "file" $ do
           getFileType [osp|directory-ospath-streaming.cabal|] >>= (@?= File Regular)
