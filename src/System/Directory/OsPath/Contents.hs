@@ -166,7 +166,7 @@ listContentsRecFold' depthLimit foldDir filePred input =
         goChildDirAcc :: Relative OsPath -> Int -> OsPath -> IO [a] -> IO [a]
         goChildDirAcc rootAcc !d dir rest1 = do
           stream1 <- Streaming.openDirStream dir
-          goChildDirStreamAcc rootAcc d (Streaming.closeDirStream stream1 *> rest1) stream1
+          goChildDirStreamAcc (coerce addTrailingPathSeparator rootAcc) d (Streaming.closeDirStream stream1 *> rest1) stream1
 
         goChildDirStreamAcc :: Relative OsPath -> Int -> IO [a] -> DirStream -> IO [a]
         goChildDirStreamAcc _       0      rest1 _       = rest1
@@ -179,7 +179,7 @@ listContentsRecFold' depthLimit foldDir filePred input =
                 Nothing                -> rest1
                 Just (yAbs, yBase, ft) -> do
                   let yRel :: Relative OsPath
-                      yRel = coerce (</>) rootAcc yBase
+                      yRel = coerce ((<>) :: OsPath -> OsPath -> OsPath) rootAcc yBase
                   case ft of
                     Other _       -> addLazy (filePred yAbs root yRel yBase ft) go1
                     File _        -> addLazy (filePred yAbs root yRel yBase ft) go1

@@ -89,12 +89,12 @@ readRawDirStream
 #ifdef mingw32_HOST_OS
 readRawDirStream stream@(RawDirStream _ _ _ root) =
   readRawDirStreamSimple stream >>=
-    traverse (\x -> let full = root </> x in (full, Basename x,) <$> getFileType full)
+    traverse (\x -> let full = root <> x in (full, Basename x,) <$> getFileType full)
 #endif
 #ifndef mingw32_HOST_OS
 readRawDirStream stream@(RawDirStream _ root) =
   readRawDirStreamSimple stream >>=
-    traverse (\x -> let full = root </> x in (full, Basename x,) <$> getFileType full)
+    traverse (\x -> let full = root <> x in (full, Basename x,) <$> getFileType full)
 #endif
 
 readRawDirStreamSimple :: RawDirStream -> IO (Maybe OsPath)
