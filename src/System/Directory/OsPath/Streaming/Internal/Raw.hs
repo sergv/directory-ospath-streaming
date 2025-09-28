@@ -35,7 +35,7 @@ module System.Directory.OsPath.Streaming.Internal.Raw
   , readRawDirStreamWithCache
   ) where
 
-import System.OsPath (osp, (</>))
+import System.OsPath (osp, addTrailingPathSeparator)
 
 import System.Directory.OsPath.FileType
 import System.Directory.OsPath.Types
@@ -90,13 +90,13 @@ openRawDirStream :: OsPath -> IO RawDirStream
 openRawDirStream fp = do
   (h, fdat) <- Win32.findFirstFile $ getOsString fp <> [pstr|\*|]
   hasMore <- Counter.new 1 -- always at least two records, "." and ".."
-  pure $! RawDirStream h fdat hasMore fp
+  pure $! RawDirStream h fdat hasMore $ addTrailingPathSeparator fp
 #endif
 
 #ifndef mingw32_HOST_OS
 openRawDirStream root = do
   stream <- Posix.openDirStream (getOsString root)
-  pure $ RawDirStream stream root
+  pure $ RawDirStream stream $ addTrailingPathSeparator root
 #endif
 
 -- | Deallocate directory handle. It’s not safe to call multiple times
@@ -226,7 +226,9 @@ readRawDirStreamWithCache (DirReadCache barr#) (RawDirStream stream root) = go
           else do
             !path <- peekFilePath namePtr
 
-            let fullPath = root </> coerce path
+            -- By construction root her ehas trailing path separator so </> is just <>.
+            -- The </> is really more costly than <> even on OsPath.
+            let fullPath = root <> coerce path
 
             !typ  <- DirInternals.dirEntType dirEnt
 
