@@ -242,7 +242,7 @@ readRawDirStreamWithCache (DirReadCache barr#) (RawDirStream stream root) = go
               DirInternals.SymbolicLinkType    -> getFileType fullPath
               DirInternals.SocketType          -> pure regularOther
               DirInternals.WhiteoutType        -> pure regularOther
-              -- Unaccounted type, probably should not happeen since the
+              -- Unaccounted type, probably should not happen since the
               -- list above is exhaustive.
               _                                -> getFileType fullPath
 
