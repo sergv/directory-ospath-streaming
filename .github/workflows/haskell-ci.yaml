@@ -32,7 +32,7 @@ jobs:
         - os: windows-latest
           ghc: "9.14"
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
 
     - uses: haskell-actions/setup@v2
       id: setup-haskell-cabal
@@ -41,7 +41,7 @@ jobs:
         cabal-version: "latest"
         cabal-update: true
 
-    - uses: actions/cache@v4
+    - uses: actions/cache@v6
       name: Cache cabal store
       with:
         path: ${{ steps.setup-haskell-cabal.outputs.cabal-store }}
@@ -94,7 +94,7 @@ jobs:
       matrix:
         arch: ['armv7', 'aarch64']
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
     - uses: uraimo/run-on-arch-action@v3
       timeout-minutes: 60
       with:
