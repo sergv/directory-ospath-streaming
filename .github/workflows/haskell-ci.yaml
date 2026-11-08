@@ -106,5 +106,5 @@ jobs:
           apt-get install -y curl ghc cabal-install libghc-tasty-quickcheck-dev libghc-tasty-hunit-dev
         run: |
           cabal update
-          cabal build all
-          cabal test --test-show-details=direct all
+          cabal build --constraint "atomic-counter +no-cmm" all
+          cabal test --constraint "atomic-counter +no-cmm" --test-show-details=direct all
