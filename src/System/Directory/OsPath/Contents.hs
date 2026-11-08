@@ -33,6 +33,10 @@ import System.Directory.OsPath.Types
 -- directory structure changes before the list is fully consumed.
 --
 -- Symlinks within directory structure may cause result to be infinitely long.
+--
+-- If any directory under root is unreadable, e.g. is owned by root and permissions prohibit
+-- current user from reading, an exception will be thrown whens resulting list is consumed to
+-- a point where results from the directory are due.
 getDirectoryContentsRecursive
   :: OsPath
   -> IO [(OsPath, FileType)]
@@ -58,6 +62,10 @@ getDirectoryContentsRecursive root =
 --
 -- Symlinks within directory structure may cause result to be infinitely long, but
 -- they can be filtered out with a suitable directory visiting predicate.
+--
+-- If any directory under root is unreadable, e.g. is owned by root and permissions prohibit
+-- current user from reading, an exception will be thrown whens resulting list is consumed to
+-- a point where results from the directory are due.
 getDirectoryContentsWithFilterRecursive
   :: (Basename OsPath -> SymlinkType -> Bool) -- ^ Whether to visit a directory
   -> (Basename OsPath ->                Bool) -- ^ Whether to collect given directory element, either file or directory.
