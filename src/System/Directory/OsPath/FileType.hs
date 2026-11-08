@@ -58,9 +58,9 @@ getFileType fp = do
 #endif
 
 -- Avoid allocations with this one weird trick.
-{-# NOINLINE regularFile #-}
+{-# NOINLINE regularFile      #-}
 {-# NOINLINE regularDirectory #-}
-{-# NOINLINE symlinkFile #-}
+{-# NOINLINE symlinkFile      #-}
 {-# NOINLINE symlinkDirectory #-}
 -- | Auxiliary constants to refer to different file types without
 -- allocations.
